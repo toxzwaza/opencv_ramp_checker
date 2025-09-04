@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>座標設定 - ランプ検知システム</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        
+        .warning-card {
+            background: rgba(255, 243, 205, 0.95);
+            border: 2px solid #ed8936;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .warning-card h3 {
+            color: #c05621;
+            margin-bottom: 15px;
+        }
+        
+        .warning-card p {
+            color: #744210;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+        
+        .status-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .status-running {
+            border-left: 5px solid #f56565;
+        }
+        
+        .status-stopped {
+            border-left: 5px solid #48bb78;
+        }
+        
+        .current-coordinates {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .coordinate-display {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .color-section {
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #e2e8f0;
+        }
+        
+        .orange-section {
+            border-color: #ed8936;
+            background: rgba(237, 137, 54, 0.1);
+        }
+        
+        .green-section {
+            border-color: #48bb78;
+            background: rgba(72, 187, 120, 0.1);
+        }
+        
+        .coordinate-info {
+            font-family: 'Courier New', monospace;
+            background: #f7fafc;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin: 10px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary {
+            background: #4299e1;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #3182ce;
+            transform: translateY(-2px);
+        }
+        
+        .btn-warning {
+            background: #ed8936;
+            color: white;
+        }
+        
+        .btn-warning:hover {
+            background: #dd6b20;
+            transform: translateY(-2px);
+        }
+        
+        .btn-success {
+            background: #48bb78;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #38a169;
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background: #718096;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #4a5568;
+            transform: translateY(-2px);
+        }
+        
+        .action-buttons {
+            text-align: center;
+            margin-top: 30px;
+        }
+        
+        .instructions {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .instructions h3 {
+            color: #4a5568;
+            margin-bottom: 15px;
+        }
+        
+        .instructions ol {
+            color: #718096;
+            line-height: 1.8;
+            padding-left: 20px;
+        }
+        
+        .instructions li {
+            margin-bottom: 8px;
+        }
+        
+        .key-instruction {
+            background: #e2e8f0;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- ヘッダー -->
+        <div class="header">
+            <h1>📍 座標設定ツール</h1>
+            <p>カメラ映像から各色ランプの座標を設定します</p>
+        </div>
+        
+        <!-- 警告メッセージ -->
+        {% if main_running %}
+        <div class="warning-card">
+            <h3>⚠️ 注意: 監視システムが実行中です</h3>
+            <p>座標設定を行うには、まず監視システムを停止する必要があります。</p>
+            <p>座標設定ツールを開始すると、自動的に監視システムが停止されます。</p>
+        </div>
+        {% endif %}
+        
+        <!-- システム状態 -->
+        <div class="status-card {% if main_running %}status-running{% else %}status-stopped{% endif %}">
+            <h3>システム状態</h3>
+            <p>
+                {% if main_running %}
+                    🔴 <strong>監視システム実行中</strong> - 座標設定前に停止されます
+                {% else %}
+                    🟢 <strong>監視システム停止中</strong> - 座標設定が可能です
+                {% endif %}
+            </p>
+        </div>
+        
+        <!-- 現在の座標設定 -->
+        <div class="current-coordinates">
+            <h3>📍 現在の座標設定</h3>
+            <div class="coordinate-display">
+                <div class="color-section orange-section">
+                    <h4>🟠 オレンジランプ</h4>
+                    <div class="coordinate-info">
+                        開始点: ({{ settings.coordinates.orange.x1 }}, {{ settings.coordinates.orange.y1 }})<br>
+                        終了点: ({{ settings.coordinates.orange.x2 }}, {{ settings.coordinates.orange.y2 }})<br>
+                        サイズ: {{ settings.coordinates.orange.x2 - settings.coordinates.orange.x1 }} x {{ settings.coordinates.orange.y2 - settings.coordinates.orange.y1 }} px
+                    </div>
+                </div>
+                
+                <div class="color-section green-section">
+                    <h4>🟢 緑ランプ</h4>
+                    <div class="coordinate-info">
+                        開始点: ({{ settings.coordinates.green.x1 }}, {{ settings.coordinates.green.y1 }})<br>
+                        終了点: ({{ settings.coordinates.green.x2 }}, {{ settings.coordinates.green.y2 }})<br>
+                        サイズ: {{ settings.coordinates.green.x2 - settings.coordinates.green.x1 }} x {{ settings.coordinates.green.y2 - settings.coordinates.green.y1 }} px
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 操作手順 -->
+        <div class="instructions">
+            <h3>📋 操作手順</h3>
+            <ol>
+                <li>下の「座標設定ツールを開始」ボタンをクリック</li>
+                <li>カメラ映像が表示されます</li>
+                <li>🟠 オレンジランプをマウスでドラッグして範囲選択</li>
+                <li><span class="key-instruction">SPACE</span>キーで🟢緑ランプの設定に切り替え</li>
+                <li>🟢 緑ランプをマウスでドラッグして範囲選択</li>
+                <li><span class="key-instruction">S</span>キーで設定を保存</li>
+                <li>このWebページに戻って監視システムを再起動</li>
+            </ol>
+        </div>
+        
+        <!-- 操作ボタン -->
+        <div class="action-buttons">
+            <button class="btn btn-warning" onclick="startCoordinateSetter()">
+                📍 座標設定ツールを開始
+            </button>
+            <button class="btn btn-primary" onclick="previewCoordinates()">
+                👁️ 座標プレビュー
+            </button>
+            <a href="/settings" class="btn btn-secondary">⚙️ その他設定</a>
+            <a href="/" class="btn btn-primary">🏠 メインページに戻る</a>
+        </div>
+        
+        <!-- プレビュー結果表示エリア -->
+        <div id="previewResult" style="display: none;">
+            <div class="current-coordinates">
+                <h3>📋 座標プレビュー結果</h3>
+                <pre id="previewOutput" style="background: #f7fafc; padding: 20px; border-radius: 10px; font-family: 'Courier New', monospace; white-space: pre-wrap;"></pre>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function startCoordinateSetter() {
+            {% if main_running %}
+            if (!confirm('監視システムを停止して座標設定ツールを開始しますか？')) {
+                return;
+            }
+            {% endif %}
+            
+            fetch('/api/coordinates/start', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('✅ 座標設定ツールを開始しました\n\n' + 
+                              '📍 カメラ映像が表示されます\n' +
+                              '🖱️ マウスドラッグで範囲を選択\n' +
+                              '⌨️ SPACEキー: 色切り替え\n' +
+                              '💾 Sキー: 保存\n' +
+                              '🚪 ESCキー: 終了');
+                        
+                        // 5秒後に状態をチェック
+                        setTimeout(function() {
+                            location.reload();
+                        }, 5000);
+                    } else {
+                        alert('❌ エラー: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    alert('❌ 通信エラー: ' + error);
+                });
+        }
+        
+        function previewCoordinates() {
+            fetch('/api/coordinates/preview')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('previewOutput').textContent = data.output;
+                        document.getElementById('previewResult').style.display = 'block';
+                        
+                        // プレビュー結果までスクロール
+                        document.getElementById('previewResult').scrollIntoView({ 
+                            behavior: 'smooth' 
+                        });
+                    } else {
+                        alert('❌ プレビューエラー: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    alert('❌ 通信エラー: ' + error);
+                });
+        }
+        
+        // ページ読み込み時の自動更新
+        window.addEventListener('load', function() {
+            // 定期的に状態をチェック
+            setInterval(function() {
+                fetch('/api/main/status')
+                    .then(response => response.json())
+                    .then(data => {
+                        const currentRunning = {{ 'true' if main_running else 'false' }};
+                        if (data.running !== currentRunning) {
+                            location.reload();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('状態確認エラー:', error);
+                    });
+            }, 3000);
+        });
+    </script>
+</body>
+</html>

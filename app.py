@@ -246,6 +246,65 @@ def settings_page():
     settings = load_settings()
     return render_template('settings.html', settings=settings)
 
+@app.route('/coordinates')
+def coordinates_page():
+    """座標設定ページ"""
+    settings = load_settings()
+    main_running = is_main_running()
+    return render_template('coordinates.html', settings=settings, main_running=main_running)
+
+@app.route('/api/coordinates/start', methods=['POST'])
+def start_coordinate_setter():
+    """座標設定ツールを開始"""
+    try:
+        # main.pyが実行中の場合は停止
+        if is_main_running():
+            stop_main_process()
+            time.sleep(2)
+        
+        # 座標設定ツールを開始
+        coord_process = subprocess.Popen(
+            ['python', 'coordinate_setter.py'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True
+        )
+        
+        return jsonify({
+            'success': True, 
+            'message': '座標設定ツールを開始しました',
+            'pid': coord_process.pid
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/coordinates/preview', methods=['GET'])
+def preview_coordinates():
+    """現在の座標設定をプレビュー"""
+    try:
+        # coordinate_setter.pyのプレビュー機能を使用
+        result = subprocess.run(
+            ['python', 'coordinate_setter.py', '--preview'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if result.returncode == 0:
+            return jsonify({
+                'success': True,
+                'output': result.stdout
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.stderr or 'プレビューの実行に失敗しました'
+            }), 500
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # ========================================
 # アプリケーション開始
 # ========================================
