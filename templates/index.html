@@ -277,6 +277,9 @@
                     <button class="btn btn-success" onclick="startMain()">▶️ 開始 (ライブカメラモード)</button>
                 {% endif %}
                 <button class="btn btn-primary" onclick="checkMainStatus()">📊 状態確認</button>
+                {% if not main_running %}
+                <button class="btn btn-secondary" onclick="debugCamera()">🔍 カメラデバッグ</button>
+                {% endif %}
             </div>
         </div>
         
@@ -508,6 +511,35 @@
                 });
         }
         
+        function debugCamera() {
+            fetch('/api/camera/debug')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const info = data.debug_info;
+                        let debugMessage = 'カメラデバッグ情報:\n\n';
+                        debugMessage += `main.py実行状態: ${info.main_running ? '実行中' : '停止中'}\n`;
+                        debugMessage += `カメラフィード状態: ${info.camera_running ? '実行中' : '停止中'}\n`;
+                        debugMessage += `利用可能なカメラ: ${info.available_camera !== null ? 'デバイス' + info.available_camera : 'なし'}\n`;
+                        debugMessage += `設定ファイル: ${info.settings_loaded ? '正常' : 'エラー'}\n`;
+                        
+                        if (info.conflicts && info.conflicts.length > 0) {
+                            debugMessage += '\n競合:\n';
+                            info.conflicts.forEach(conflict => {
+                                debugMessage += `  - ${conflict}\n`;
+                            });
+                        }
+                        
+                        alert(debugMessage);
+                    } else {
+                        alert('❌ デバッグ情報の取得に失敗: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    alert('❌ 通信エラー: ' + error);
+                });
+        }
+        
         // カメラフィードの自動更新
         function refreshCameraFeed() {
             const img = document.getElementById('cameraFeed');
@@ -518,8 +550,8 @@
             }
         }
         
-        // カメラフィードを定期的にリフレッシュ（接続エラー対策）
-        setInterval(refreshCameraFeed, 60000); // 1分毎
+        // カメラフィードを定期的にリフレッシュ（main.pyの更新に合わせて）
+        setInterval(refreshCameraFeed, 10000); // 10秒毎に更新
     </script>
 </body>
 </html>

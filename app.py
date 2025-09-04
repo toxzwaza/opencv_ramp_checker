@@ -324,25 +324,51 @@ def find_available_camera():
     settings = load_settings()
     search_range = settings.get('camera', {}).get('search_range', 5) if settings else 5
     
+    print(f"[CAMERA] カメラデバイスを検索中... (範囲: 0-{search_range-1})")
+    
     for camera_index in range(search_range):
-        cap = cv2.VideoCapture(camera_index)
-        if cap.isOpened():
-            ret, frame = cap.read()
-            cap.release()
-            if ret:
-                return camera_index
+        print(f"[CAMERA] カメラデバイス {camera_index} をテスト中...")
+        try:
+            cap = cv2.VideoCapture(camera_index)
+            if cap.isOpened():
+                ret, frame = cap.read()
+                if ret and frame is not None:
+                    print(f"[FOUND] カメラデバイス {camera_index} が利用可能です (解像度: {frame.shape[1]}x{frame.shape[0]})")
+                    cap.release()
+                    return camera_index
+                else:
+                    print(f"[FAIL] カメラデバイス {camera_index} - フレーム取得失敗")
+                cap.release()
+            else:
+                print(f"[FAIL] カメラデバイス {camera_index} - デバイス開けず")
+        except Exception as e:
+            print(f"[ERROR] カメラデバイス {camera_index} - エラー: {e}")
+    
+    print("[ERROR] 利用可能なカメラデバイスが見つかりません")
     return None
 
 def generate_camera_frames():
     """カメラフレームを生成（ストリーミング用）"""
     global camera_running
     
+    print("[STREAM] カメラストリーミング開始")
     camera_index = find_available_camera()
     if camera_index is None:
+        print("[STREAM] カメラが見つからないため、エラーフレームを生成")
+        # エラー用のダミーフレームを生成
+        error_frame = create_error_frame()
+        _, buffer = cv2.imencode('.jpg', error_frame)
+        frame_bytes = buffer.tobytes()
+        
+        while camera_running:
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            time.sleep(1)
         return
     
     cap = cv2.VideoCapture(camera_index)
     if not cap.isOpened():
+        print(f"[STREAM] カメラデバイス {camera_index} を開けませんでした")
         return
     
     try:
@@ -462,6 +488,59 @@ def add_status_overlay_web(frame):
     
     return overlay_frame
 
+def create_error_frame():
+    """カメラエラー時のダミーフレームを作成"""
+    # 640x480の黒いフレームを作成
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    
+    # エラーメッセージを描画
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    
+    # 背景矩形
+    cv2.rectangle(frame, (50, 200), (590, 280), (50, 50, 50), -1)
+    
+    # エラーテキスト
+    error_texts = [
+        "Camera Not Available",
+        "Please check camera connection",
+        "or try restarting the system"
+    ]
+    
+    y_offset = 230
+    for text in error_texts:
+        (text_width, _), _ = cv2.getTextSize(text, font, 0.8, 2)
+        x_offset = (640 - text_width) // 2
+        cv2.putText(frame, text, (x_offset, y_offset), font, 0.8, (0, 0, 255), 2)
+        y_offset += 30
+    
+    return frame
+
+def check_camera_conflicts():
+    """カメラの競合状態をチェック"""
+    conflicts = []
+    
+    # main.pyプロセスがカメラを使用中かチェック
+    if is_main_running():
+        conflicts.append("main.pyがカメラを使用中の可能性があります")
+    
+    # 他のOpenCVプロセスをチェック
+    try:
+        import psutil
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                if proc.info['cmdline']:
+                    cmdline = ' '.join(proc.info['cmdline'])
+                    if ('python' in cmdline.lower() and 
+                        ('cv2' in cmdline or 'opencv' in cmdline) and 
+                        proc.info['pid'] != os.getpid()):
+                        conflicts.append(f"他のOpenCVプロセスが実行中: PID {proc.info['pid']}")
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+    except ImportError:
+        pass
+    
+    return conflicts
+
 def start_camera_feed():
     """カメラフィードを開始"""
     global camera_running, camera_thread
@@ -487,19 +566,133 @@ def stop_camera_feed():
 
 @app.route('/video_feed')
 def video_feed():
-    """ビデオストリーミングエンドポイント"""
-    global camera_running
-    
-    # main.pyが実行中の場合のみストリーミングを提供
+    """画像ファイルベースの映像フィード"""
+    # main.pyが実行中の場合のみ画像を提供
     if not is_main_running():
-        # 停止中の場合は空のレスポンスを返す
+        print("[STREAM] main.pyが停止中のため、映像を提供しません")
         return Response("", mimetype='text/plain')
     
-    if not camera_running:
-        start_camera_feed()
+    # streaming/current_frame.jpgを読み込んで返す
+    try:
+        current_frame_path = os.path.join("streaming", "current_frame.jpg")
+        
+        if os.path.exists(current_frame_path):
+            # ファイルの更新時刻をチェック
+            file_time = os.path.getmtime(current_frame_path)
+            current_time = time.time()
+            
+            # 5分以上古い場合は「接続なし」画像を表示
+            if current_time - file_time > 300:  # 5分
+                print(f"[STREAM] フレームが古すぎます ({current_time - file_time:.1f}秒前)")
+                error_frame = create_no_connection_frame()
+                _, buffer = cv2.imencode('.jpg', error_frame)
+                return Response(buffer.tobytes(), mimetype='image/jpeg')
+            
+            # 画像ファイルを読み込んで返す
+            with open(current_frame_path, 'rb') as f:
+                image_data = f.read()
+            
+            return Response(image_data, mimetype='image/jpeg')
+        else:
+            print("[STREAM] current_frame.jpgが見つかりません")
+            # 「待機中」画像を生成
+            waiting_frame = create_waiting_frame()
+            _, buffer = cv2.imencode('.jpg', waiting_frame)
+            return Response(buffer.tobytes(), mimetype='image/jpeg')
+            
+    except Exception as e:
+        print(f"[ERROR] 映像フィード エラー: {e}")
+        error_frame = create_error_frame()
+        _, buffer = cv2.imencode('.jpg', error_frame)
+        return Response(buffer.tobytes(), mimetype='image/jpeg')
+
+def create_waiting_frame():
+    """待機中フレームを作成"""
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    font = cv2.FONT_HERSHEY_SIMPLEX
     
-    return Response(generate_camera_frames(),
-                   mimetype='multipart/x-mixed-replace; boundary=frame')
+    # 背景矩形
+    cv2.rectangle(frame, (50, 200), (590, 280), (0, 100, 200), -1)
+    
+    # 待機メッセージ
+    waiting_texts = [
+        "Waiting for camera feed...",
+        "main.py is starting up",
+        "Please wait a moment"
+    ]
+    
+    y_offset = 230
+    for text in waiting_texts:
+        (text_width, _), _ = cv2.getTextSize(text, font, 0.8, 2)
+        x_offset = (640 - text_width) // 2
+        cv2.putText(frame, text, (x_offset, y_offset), font, 0.8, (255, 255, 255), 2)
+        y_offset += 30
+    
+    return frame
+
+def create_no_connection_frame():
+    """接続なしフレームを作成"""
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    
+    # 背景矩形
+    cv2.rectangle(frame, (50, 200), (590, 280), (0, 0, 100), -1)
+    
+    # 接続なしメッセージ
+    no_conn_texts = [
+        "No recent camera feed",
+        "System may have stopped",
+        "Check main.py status"
+    ]
+    
+    y_offset = 230
+    for text in no_conn_texts:
+        (text_width, _), _ = cv2.getTextSize(text, font, 0.8, 2)
+        x_offset = (640 - text_width) // 2
+        cv2.putText(frame, text, (x_offset, y_offset), font, 0.8, (255, 255, 0), 2)
+        y_offset += 30
+    
+    return frame
+
+def create_error_frame():
+    """カメラエラー時のダミーフレームを作成"""
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    
+    # 背景矩形
+    cv2.rectangle(frame, (50, 200), (590, 280), (50, 50, 50), -1)
+    
+    # エラーテキスト
+    error_texts = [
+        "Camera Error",
+        "Please check camera connection",
+        "or restart the system"
+    ]
+    
+    y_offset = 230
+    for text in error_texts:
+        (text_width, _), _ = cv2.getTextSize(text, font, 0.8, 2)
+        x_offset = (640 - text_width) // 2
+        cv2.putText(frame, text, (x_offset, y_offset), font, 0.8, (0, 0, 255), 2)
+        y_offset += 30
+    
+    return frame
+
+@app.route('/api/camera/debug', methods=['GET'])
+def camera_debug():
+    """カメラデバッグ情報を取得"""
+    try:
+        debug_info = {
+            'main_running': is_main_running(),
+            'camera_running': camera_running,
+            'available_camera': find_available_camera(),
+            'conflicts': check_camera_conflicts(),
+            'settings_loaded': load_settings() is not None
+        }
+        
+        return jsonify({'success': True, 'debug_info': debug_info})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/camera/start', methods=['POST'])
 def start_camera_api():

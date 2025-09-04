@@ -326,6 +326,46 @@ def create_status_overlay(frame, detection_logs, current_time):
     
     return overlay_frame
 
+def save_frame_for_web(frame):
+    """Web表示用にフレームを画像ファイルとして保存"""
+    try:
+        # streamingディレクトリが存在しない場合は作成
+        streaming_dir = "streaming"
+        if not os.path.exists(streaming_dir):
+            os.makedirs(streaming_dir)
+        
+        # 現在のフレームを保存
+        current_frame_path = os.path.join(streaming_dir, "current_frame.jpg")
+        success = cv2.imwrite(current_frame_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        
+        if success:
+            # タイムスタンプ付きでバックアップも保存（最新3枚のみ保持）
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = os.path.join(streaming_dir, f"frame_{timestamp}.jpg")
+            cv2.imwrite(backup_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            
+            # 古いバックアップファイルを削除（最新3枚のみ保持）
+            cleanup_old_frames(streaming_dir)
+        
+    except Exception as e:
+        print(f"[ERROR] Web用フレーム保存エラー: {e}")
+
+def cleanup_old_frames(streaming_dir):
+    """古いフレームファイルを削除"""
+    try:
+        import glob
+        frame_files = glob.glob(os.path.join(streaming_dir, "frame_*.jpg"))
+        frame_files.sort(reverse=True)  # 新しい順にソート
+        
+        # 最新3枚を残して削除
+        for old_file in frame_files[3:]:
+            try:
+                os.remove(old_file)
+            except:
+                pass
+    except Exception as e:
+        print(f"[ERROR] フレームクリーンアップエラー: {e}")
+
 def run_camera_with_live_display():
     """カメラ映像を常時表示しながら定期的に色検出を実行"""
     global current_state, orange_detection_start_time, notification_sent, debug_mode
@@ -433,6 +473,9 @@ def run_camera_with_live_display():
                             if len(detection_logs) > 10:
                                 detection_logs = detection_logs[-10:]
                     
+                    # Web表示用に映像フレームを保存
+                    save_frame_for_web(display_frame)
+                    
                     # 一時ファイルを削除
                     try:
                         os.remove(temp_path)
@@ -441,6 +484,15 @@ def run_camera_with_live_display():
             
             # ステータス情報をオーバーレイして表示
             display_frame = create_status_overlay(frame, detection_logs, current_time_unix)
+            
+            # 毎フレームWeb表示用に保存（軽量化のため5フレームに1回）
+            if hasattr(run_camera_with_live_display, 'frame_counter'):
+                run_camera_with_live_display.frame_counter += 1
+            else:
+                run_camera_with_live_display.frame_counter = 0
+            
+            if run_camera_with_live_display.frame_counter % 5 == 0:
+                save_frame_for_web(display_frame)
             
             # 次回検知までの時間をオーバーレイ
             next_detection_in = detection_interval - (current_time_unix - last_detection_time)
