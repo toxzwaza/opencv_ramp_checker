@@ -448,30 +448,41 @@ def run_camera_with_live_display():
                     
                     # 色検出処理を実行（コンソール出力を抑制）
                     # process_single_analysis の代わりに直接処理
-                    if crop_and_save_all_colors(temp_path):
-                        results = run_analysis_silent()  # 静音版の分析
-                        if results and len(results) == 2:
-                            judgment, confidence, reasons, scores = comprehensive_judgment(results)
+                    try:
+                        if crop_and_save_all_colors(temp_path):
+                            results = run_analysis_silent()  # 静音版の分析
+                            if results and len(results) == 2:
+                                judgment, confidence, reasons, scores = comprehensive_judgment(results)
                             
-                            # 検知結果から割合を取得
-                            orange_percentage = 0
-                            green_percentage = 0
-                            for result in results:
-                                if result['expected_color'] == 'オレンジ':
-                                    orange_percentage = result['percentage']
-                                elif result['expected_color'] == '緑':
-                                    green_percentage = result['percentage']
-                            
-                            # フラグ状態を更新
-                            detection_state = update_detection_state(judgment, orange_percentage, green_percentage, os.path.basename(temp_path))
-                            
-                            # ログに記録
-                            log_entry = f"{current_datetime.strftime('%H:%M:%S')} - {judgment} (O:{orange_percentage:.1f}% G:{green_percentage:.1f}%)"
-                            detection_logs.append(log_entry)
-                            
-                            # ログが多すぎる場合は古いものを削除
-                            if len(detection_logs) > 10:
-                                detection_logs = detection_logs[-10:]
+                                # 検知結果から割合を取得
+                                orange_percentage = 0
+                                green_percentage = 0
+                                for result in results:
+                                    if result['expected_color'] == 'オレンジ':
+                                        orange_percentage = result['percentage']
+                                    elif result['expected_color'] == '緑':
+                                        green_percentage = result['percentage']
+                                
+                                # フラグ状態を更新
+                                detection_state = update_detection_state(judgment, orange_percentage, green_percentage, os.path.basename(temp_path))
+                                
+                                # ログに記録
+                                log_entry = f"{current_datetime.strftime('%H:%M:%S')} - {judgment} (O:{orange_percentage:.1f}% G:{green_percentage:.1f}%)"
+                                detection_logs.append(log_entry)
+                                
+                                # ログが多すぎる場合は古いものを削除
+                                if len(detection_logs) > 10:
+                                    detection_logs = detection_logs[-10:]
+                            else:
+                                print("[WARNING] 色検出結果が不完全です")
+                                detection_logs.append(f"{current_datetime.strftime('%H:%M:%S')} - ERROR: Detection failed")
+                        else:
+                            print("[WARNING] 画像切り出しに失敗しました")
+                            detection_logs.append(f"{current_datetime.strftime('%H:%M:%S')} - ERROR: Crop failed")
+                    
+                    except Exception as detection_error:
+                        print(f"[ERROR] 色検出処理でエラー: {detection_error}")
+                        detection_logs.append(f"{current_datetime.strftime('%H:%M:%S')} - ERROR: {str(detection_error)}")
                     
                     # Web表示用に映像フレームを保存
                     save_frame_for_web(display_frame)
@@ -479,8 +490,8 @@ def run_camera_with_live_display():
                     # 一時ファイルを削除
                     try:
                         os.remove(temp_path)
-                    except:
-                        pass
+                    except Exception as cleanup_error:
+                        print(f"[WARNING] 一時ファイル削除エラー: {cleanup_error}")
             
             # ステータス情報をオーバーレイして表示
             display_frame = create_status_overlay(frame, detection_logs, current_time_unix)
@@ -492,7 +503,10 @@ def run_camera_with_live_display():
                 run_camera_with_live_display.frame_counter = 0
             
             if run_camera_with_live_display.frame_counter % 5 == 0:
-                save_frame_for_web(display_frame)
+                try:
+                    save_frame_for_web(display_frame)
+                except Exception as save_error:
+                    print(f"[WARNING] フレーム保存エラー: {save_error}")
             
             # 次回検知までの時間をオーバーレイ
             next_detection_in = detection_interval - (current_time_unix - last_detection_time)
@@ -511,6 +525,10 @@ def run_camera_with_live_display():
                 
     except KeyboardInterrupt:
         print("\n[EXIT] キーボード割り込みで終了")
+    except Exception as e:
+        print(f"\n[ERROR] カメラループでエラーが発生: {e}")
+        import traceback
+        traceback.print_exc()
     
     finally:
         cap.release()
