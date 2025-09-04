@@ -315,6 +315,130 @@ def preview_coordinates():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/coordinate_preview_feed')
+def coordinate_preview_feed():
+    """座標プレビュー用の映像フィード"""
+    try:
+        # カメラから1フレーム取得
+        camera_index = find_available_camera()
+        if camera_index is None:
+            error_frame = create_error_frame()
+            _, buffer = cv2.imencode('.jpg', error_frame)
+            return Response(buffer.tobytes(), mimetype='image/jpeg')
+        
+        cap = cv2.VideoCapture(camera_index)
+        if not cap.isOpened():
+            error_frame = create_error_frame()
+            _, buffer = cv2.imencode('.jpg', error_frame)
+            return Response(buffer.tobytes(), mimetype='image/jpeg')
+        
+        # フレームを取得
+        ret, frame = cap.read()
+        cap.release()
+        
+        if not ret:
+            error_frame = create_error_frame()
+            _, buffer = cv2.imencode('.jpg', error_frame)
+            return Response(buffer.tobytes(), mimetype='image/jpeg')
+        
+        # 座標プレビューオーバーレイを追加
+        frame_with_coordinates = add_coordinate_preview_overlay(frame)
+        
+        # JPEGエンコード
+        _, buffer = cv2.imencode('.jpg', frame_with_coordinates, [cv2.IMWRITE_JPEG_QUALITY, 90])
+        return Response(buffer.tobytes(), mimetype='image/jpeg')
+        
+    except Exception as e:
+        print(f"[ERROR] 座標プレビューエラー: {e}")
+        error_frame = create_error_frame()
+        _, buffer = cv2.imencode('.jpg', error_frame)
+        return Response(buffer.tobytes(), mimetype='image/jpeg')
+
+def add_coordinate_preview_overlay(frame):
+    """座標プレビュー用のオーバーレイを追加"""
+    overlay_frame = frame.copy()
+    settings = load_settings()
+    
+    if not settings:
+        return overlay_frame
+    
+    # 座標を取得
+    coordinates = settings.get('coordinates', {})
+    
+    # オレンジランプの座標
+    orange_coords = coordinates.get('orange', {})
+    if all(key in orange_coords for key in ['x1', 'y1', 'x2', 'y2']):
+        x1, y1, x2, y2 = orange_coords['x1'], orange_coords['y1'], orange_coords['x2'], orange_coords['y2']
+        
+        # オレンジ色の矩形を描画
+        cv2.rectangle(overlay_frame, (x1, y1), (x2, y2), (0, 165, 255), 3)  # オレンジ色 (BGR)
+        
+        # ラベルを描画
+        label_text = "ORANGE LAMP"
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        (text_width, text_height), baseline = cv2.getTextSize(label_text, font, 0.6, 2)
+        
+        # ラベル背景
+        label_y = max(y1 - 10, text_height + 5)
+        cv2.rectangle(overlay_frame, (x1, label_y - text_height - 5), 
+                     (x1 + text_width + 10, label_y + 5), (0, 165, 255), -1)
+        
+        # ラベルテキスト
+        cv2.putText(overlay_frame, label_text, (x1 + 5, label_y), 
+                   font, 0.6, (255, 255, 255), 2)
+        
+        # サイズ情報
+        size_text = f"{x2-x1}x{y2-y1}"
+        cv2.putText(overlay_frame, size_text, (x1, y2 + 20), 
+                   font, 0.5, (0, 165, 255), 2)
+    
+    # 緑ランプの座標
+    green_coords = coordinates.get('green', {})
+    if all(key in green_coords for key in ['x1', 'y1', 'x2', 'y2']):
+        x1, y1, x2, y2 = green_coords['x1'], green_coords['y1'], green_coords['x2'], green_coords['y2']
+        
+        # 緑色の矩形を描画
+        cv2.rectangle(overlay_frame, (x1, y1), (x2, y2), (0, 255, 0), 3)  # 緑色 (BGR)
+        
+        # ラベルを描画
+        label_text = "GREEN LAMP"
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        (text_width, text_height), baseline = cv2.getTextSize(label_text, font, 0.6, 2)
+        
+        # ラベル背景
+        label_y = max(y1 - 10, text_height + 5)
+        cv2.rectangle(overlay_frame, (x1, label_y - text_height - 5), 
+                     (x1 + text_width + 10, label_y + 5), (0, 255, 0), -1)
+        
+        # ラベルテキスト
+        cv2.putText(overlay_frame, label_text, (x1 + 5, label_y), 
+                   font, 0.6, (0, 0, 0), 2)
+        
+        # サイズ情報
+        size_text = f"{x2-x1}x{y2-y1}"
+        cv2.putText(overlay_frame, size_text, (x1, y2 + 20), 
+                   font, 0.5, (0, 255, 0), 2)
+    
+    # 全体的な情報を表示
+    info_text = "COORDINATE PREVIEW"
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    (text_width, text_height), baseline = cv2.getTextSize(info_text, font, 0.8, 2)
+    
+    # 情報背景
+    cv2.rectangle(overlay_frame, (10, 10), 
+                 (text_width + 20, text_height + 20), (100, 100, 100), -1)
+    
+    # 情報テキスト
+    cv2.putText(overlay_frame, info_text, (15, text_height + 15), 
+               font, 0.8, (255, 255, 255), 2)
+    
+    # 時刻表示
+    time_text = datetime.now().strftime('%H:%M:%S')
+    cv2.putText(overlay_frame, time_text, (15, frame.shape[0] - 15), 
+               font, 0.6, (255, 255, 255), 2)
+    
+    return overlay_frame
+
 # ========================================
 # カメラストリーミング機能
 # ========================================

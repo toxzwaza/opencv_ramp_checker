@@ -227,9 +227,26 @@
             </p>
         </div>
         
-        <!-- 現在の座標設定 -->
+        <!-- 座標プレビュー映像 -->
         <div class="current-coordinates">
-            <h3>📍 現在の座標設定</h3>
+            <h3>📍 座標プレビュー</h3>
+            <div style="text-align: center; margin: 20px 0;">
+                <img id="coordinatePreview" src="/coordinate_preview_feed" alt="座標プレビュー" 
+                     style="max-width: 100%; height: auto; border: 3px solid #4a5568; border-radius: 10px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);"
+                     onerror="handlePreviewError(this)">
+                <div id="previewError" style="display: none; padding: 20px; background: #fed7d7; color: #c53030; border-radius: 10px; margin-top: 10px;">
+                    📷 プレビューカメラに接続できません。カメラが接続されているか確認してください。
+                </div>
+                <div style="margin-top: 10px;">
+                    <button class="btn btn-primary" onclick="refreshPreview()" style="margin: 5px;">🔄 プレビュー更新</button>
+                    <button class="btn btn-secondary" onclick="togglePreviewInfo()" style="margin: 5px;">📊 座標詳細</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 現在の座標設定（詳細） -->
+        <div class="current-coordinates" id="coordinateDetails" style="display: none;">
+            <h3>📍 現在の座標設定（詳細）</h3>
             <div class="coordinate-display">
                 <div class="color-section orange-section">
                     <h4>🟠 オレンジランプ</h4>
@@ -338,6 +355,39 @@
                     alert('❌ 通信エラー: ' + error);
                 });
         }
+        
+        function handlePreviewError(img) {
+            // プレビューエラー時の処理
+            img.style.display = 'none';
+            document.getElementById('previewError').style.display = 'block';
+        }
+        
+        function refreshPreview() {
+            const img = document.getElementById('coordinatePreview');
+            const timestamp = new Date().getTime();
+            img.src = '/coordinate_preview_feed?' + timestamp;
+            img.style.display = 'block';
+            document.getElementById('previewError').style.display = 'none';
+        }
+        
+        function togglePreviewInfo() {
+            const details = document.getElementById('coordinateDetails');
+            if (details.style.display === 'none') {
+                details.style.display = 'block';
+                event.target.textContent = '📊 座標詳細を隠す';
+            } else {
+                details.style.display = 'none';
+                event.target.textContent = '📊 座標詳細';
+            }
+        }
+        
+        // プレビューの定期更新
+        setInterval(function() {
+            const img = document.getElementById('coordinatePreview');
+            if (img && img.style.display !== 'none') {
+                refreshPreview();
+            }
+        }, 30000); // 30秒毎に更新
         
         // ページ読み込み時の自動更新
         window.addEventListener('load', function() {
