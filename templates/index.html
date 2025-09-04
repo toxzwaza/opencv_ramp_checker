@@ -237,6 +237,19 @@
             現在時刻: {{ current_time }}
         </div>
         
+        <!-- カメラ映像表示 -->
+        <div class="status-card">
+            <h2>📹 ライブカメラ映像</h2>
+            <div class="camera-container" style="text-align: center; margin: 20px 0;">
+                <img id="cameraFeed" src="/video_feed" alt="カメラ映像" 
+                     style="max-width: 100%; height: auto; border: 3px solid #4299e1; border-radius: 10px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);"
+                     onerror="handleCameraError(this)">
+                <div id="cameraError" style="display: none; padding: 20px; background: #fed7d7; color: #c53030; border-radius: 10px; margin-top: 10px;">
+                    📷 カメラに接続できません。カメラが接続されているか確認してください。
+                </div>
+            </div>
+        </div>
+        
         <!-- main.py実行状態 -->
         <div class="status-card {% if main_running %}status-running{% else %}status-stopped{% endif %}">
             <h2>
@@ -452,6 +465,32 @@
                     });
             }, 5000); // 5秒毎にチェック
         });
+        
+        function handleCameraError(img) {
+            // カメラエラー時の処理
+            img.style.display = 'none';
+            document.getElementById('cameraError').style.display = 'block';
+            
+            // 5秒後に再試行
+            setTimeout(function() {
+                img.src = '/video_feed?' + new Date().getTime();
+                img.style.display = 'block';
+                document.getElementById('cameraError').style.display = 'none';
+            }, 5000);
+        }
+        
+        // カメラフィードの自動更新
+        function refreshCameraFeed() {
+            const img = document.getElementById('cameraFeed');
+            if (img && img.style.display !== 'none') {
+                // タイムスタンプを追加してキャッシュを回避
+                const timestamp = new Date().getTime();
+                img.src = '/video_feed?' + timestamp;
+            }
+        }
+        
+        // カメラフィードを定期的にリフレッシュ（接続エラー対策）
+        setInterval(refreshCameraFeed, 60000); // 1分毎
     </script>
 </body>
 </html>

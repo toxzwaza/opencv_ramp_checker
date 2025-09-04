@@ -5,7 +5,7 @@
 Flask を使用してsetting.jsonを編集し、main.pyを再実行
 """
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify, redirect, url_for, Response
 import json
 import os
 import subprocess
@@ -13,7 +13,10 @@ import threading
 import time
 import signal
 import psutil
+import cv2
+import numpy as np
 from datetime import datetime
+import base64
 
 app = Flask(__name__)
 app.secret_key = 'lamp_detection_system_secret_key'
@@ -21,6 +24,9 @@ app.secret_key = 'lamp_detection_system_secret_key'
 # グローバル変数
 main_process = None
 main_process_thread = None
+camera_feed = None
+camera_thread = None
+camera_running = False
 
 # ========================================
 # 設定ファイル管理
@@ -310,12 +316,174 @@ def preview_coordinates():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # ========================================
+# カメラストリーミング機能
+# ========================================
+
+def find_available_camera():
+    """利用可能なカメラデバイスを検索"""
+    settings = load_settings()
+    search_range = settings.get('camera', {}).get('search_range', 5) if settings else 5
+    
+    for camera_index in range(search_range):
+        cap = cv2.VideoCapture(camera_index)
+        if cap.isOpened():
+            ret, frame = cap.read()
+            cap.release()
+            if ret:
+                return camera_index
+    return None
+
+def generate_camera_frames():
+    """カメラフレームを生成（ストリーミング用）"""
+    global camera_running
+    
+    camera_index = find_available_camera()
+    if camera_index is None:
+        return
+    
+    cap = cv2.VideoCapture(camera_index)
+    if not cap.isOpened():
+        return
+    
+    try:
+        while camera_running:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            
+            # フレームサイズを調整（Webページ表示用）
+            height, width = frame.shape[:2]
+            if width > 640:
+                scale = 640 / width
+                new_width = 640
+                new_height = int(height * scale)
+                frame = cv2.resize(frame, (new_width, new_height))
+            
+            # 現在の検知状態をオーバーレイ
+            frame_with_status = add_status_overlay_web(frame)
+            
+            # JPEGエンコード
+            _, buffer = cv2.imencode('.jpg', frame_with_status, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            frame_bytes = buffer.tobytes()
+            
+            # ストリーミング形式で出力
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            
+            time.sleep(0.03)  # 約30FPS
+            
+    except Exception as e:
+        print(f"[ERROR] カメラストリーミングエラー: {e}")
+    finally:
+        cap.release()
+
+def add_status_overlay_web(frame):
+    """Web表示用のステータスオーバーレイを追加"""
+    overlay_frame = frame.copy()
+    
+    # 簡潔な状態表示
+    main_running = is_main_running()
+    
+    if main_running:
+        status_text = "[MONITORING ACTIVE]"
+        color = (0, 255, 0)  # 緑
+        bg_color = (0, 100, 0)
+    else:
+        status_text = "[MONITORING STOPPED]"
+        color = (0, 0, 255)  # 赤
+        bg_color = (100, 0, 0)
+    
+    # 背景付きテキストを描画
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.8
+    thickness = 2
+    
+    (text_width, text_height), baseline = cv2.getTextSize(status_text, font, font_scale, thickness)
+    
+    # 背景矩形
+    cv2.rectangle(overlay_frame, (10, 10), 
+                 (text_width + 20, text_height + 20), bg_color, -1)
+    
+    # テキスト
+    cv2.putText(overlay_frame, status_text, (15, text_height + 15), 
+               font, font_scale, color, thickness)
+    
+    # 時刻表示
+    time_text = datetime.now().strftime('%H:%M:%S')
+    cv2.putText(overlay_frame, time_text, (15, frame.shape[0] - 15), 
+               font, 0.6, (255, 255, 255), 2)
+    
+    return overlay_frame
+
+def start_camera_feed():
+    """カメラフィードを開始"""
+    global camera_running, camera_thread
+    
+    if camera_running:
+        return True
+    
+    camera_running = True
+    camera_thread = threading.Thread(target=lambda: None)  # ダミー
+    camera_thread.start()
+    
+    return True
+
+def stop_camera_feed():
+    """カメラフィードを停止"""
+    global camera_running, camera_thread
+    
+    camera_running = False
+    if camera_thread and camera_thread.is_alive():
+        camera_thread.join(timeout=2)
+    
+    return True
+
+@app.route('/video_feed')
+def video_feed():
+    """ビデオストリーミングエンドポイント"""
+    global camera_running
+    
+    if not camera_running:
+        start_camera_feed()
+    
+    return Response(generate_camera_frames(),
+                   mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/api/camera/start', methods=['POST'])
+def start_camera_api():
+    """カメラフィードを開始するAPI"""
+    try:
+        success = start_camera_feed()
+        if success:
+            return jsonify({'success': True, 'message': 'カメラフィードを開始しました'})
+        else:
+            return jsonify({'success': False, 'error': 'カメラフィードの開始に失敗しました'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/camera/stop', methods=['POST'])
+def stop_camera_api():
+    """カメラフィードを停止するAPI"""
+    try:
+        success = stop_camera_feed()
+        if success:
+            return jsonify({'success': True, 'message': 'カメラフィードを停止しました'})
+        else:
+            return jsonify({'success': False, 'error': 'カメラフィードの停止に失敗しました'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ========================================
 # アプリケーション開始
 # ========================================
 
 def cleanup_on_exit():
     """終了時のクリーンアップ"""
-    global main_process
+    global main_process, camera_running
+    
+    # カメラフィードを停止
+    stop_camera_feed()
+    
     if main_process:
         print("[INFO] Flaskアプリ終了時にmain.pyを停止中...")
         stop_main_process()
