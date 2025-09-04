@@ -484,9 +484,6 @@ def run_camera_with_live_display():
                         print(f"[ERROR] 色検出処理でエラー: {detection_error}")
                         detection_logs.append(f"{current_datetime.strftime('%H:%M:%S')} - ERROR: {str(detection_error)}")
                     
-                    # Web表示用に映像フレームを保存
-                    save_frame_for_web(display_frame)
-                    
                     # 一時ファイルを削除
                     try:
                         os.remove(temp_path)
@@ -494,28 +491,40 @@ def run_camera_with_live_display():
                         print(f"[WARNING] 一時ファイル削除エラー: {cleanup_error}")
             
             # ステータス情報をオーバーレイして表示
-            display_frame = create_status_overlay(frame, detection_logs, current_time_unix)
-            
-            # 毎フレームWeb表示用に保存（軽量化のため5フレームに1回）
-            if hasattr(run_camera_with_live_display, 'frame_counter'):
-                run_camera_with_live_display.frame_counter += 1
-            else:
-                run_camera_with_live_display.frame_counter = 0
-            
-            if run_camera_with_live_display.frame_counter % 5 == 0:
-                try:
-                    save_frame_for_web(display_frame)
-                except Exception as save_error:
-                    print(f"[WARNING] フレーム保存エラー: {save_error}")
+            try:
+                display_frame = create_status_overlay(frame, detection_logs, current_time_unix)
+                
+                # 毎フレームWeb表示用に保存（軽量化のため5フレームに1回）
+                if hasattr(run_camera_with_live_display, 'frame_counter'):
+                    run_camera_with_live_display.frame_counter += 1
+                else:
+                    run_camera_with_live_display.frame_counter = 0
+                
+                if run_camera_with_live_display.frame_counter % 5 == 0:
+                    try:
+                        save_frame_for_web(display_frame)
+                    except Exception as save_error:
+                        print(f"[WARNING] フレーム保存エラー: {save_error}")
+                        
+            except Exception as overlay_error:
+                print(f"[ERROR] オーバーレイ作成エラー: {overlay_error}")
+                display_frame = frame  # オーバーレイ失敗時は元フレームを使用
             
             # 次回検知までの時間をオーバーレイ
-            next_detection_in = detection_interval - (current_time_unix - last_detection_time)
-            if next_detection_in > 0:
-                next_text = f"Next detection: {next_detection_in:.0f}s"
-                draw_text_with_background(display_frame, next_text, (20, frame.shape[0] - 30), 
-                                        font_scale=0.4, color=(255, 255, 0), bg_color=(50, 50, 0))
-            
-            cv2.imshow(window_name, display_frame)
+            try:
+                next_detection_in = detection_interval - (current_time_unix - last_detection_time)
+                if next_detection_in > 0:
+                    next_text = f"Next detection: {next_detection_in:.0f}s"
+                    draw_text_with_background(display_frame, next_text, (20, frame.shape[0] - 30), 
+                                            font_scale=0.4, color=(255, 255, 0), bg_color=(50, 50, 0))
+                
+                # 画像を表示
+                cv2.imshow(window_name, display_frame)
+                
+            except Exception as display_error:
+                print(f"[ERROR] 画面表示エラー: {display_error}")
+                # エラー時は元フレームを表示
+                cv2.imshow(window_name, frame)
             
             # キー入力をチェック
             key = cv2.waitKey(1) & 0xFF
