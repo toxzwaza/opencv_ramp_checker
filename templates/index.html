@@ -237,7 +237,8 @@
             現在時刻: {{ current_time }}
         </div>
         
-        <!-- カメラ映像表示 -->
+        <!-- カメラ映像表示（main.py実行中のみ） -->
+        {% if main_running %}
         <div class="status-card">
             <h2>📹 ライブカメラ映像</h2>
             <div class="camera-container" style="text-align: center; margin: 20px 0;">
@@ -248,7 +249,11 @@
                     📷 カメラに接続できません。カメラが接続されているか確認してください。
                 </div>
             </div>
+            <p style="text-align: center; color: #718096; font-size: 0.9em; margin-top: 10px;">
+                💡 この映像はmain.pyで表示されているものと同じ内容です
+            </p>
         </div>
+        {% endif %}
         
         <!-- main.py実行状態 -->
         <div class="status-card {% if main_running %}status-running{% else %}status-stopped{% endif %}">
@@ -457,7 +462,18 @@
                         // 状態が変化した場合はページを更新
                         const currentRunning = {{ 'true' if main_running else 'false' }};
                         if (data.running !== currentRunning) {
-                            refreshPage();
+                            // 状態が変化した場合
+                            if (data.running) {
+                                // 実行開始された場合、カメラフィードを表示
+                                location.reload(); // ページ全体を更新
+                            } else {
+                                // 停止された場合、カメラフィードを非表示
+                                const cameraContainer = document.querySelector('.status-card:has(#cameraFeed)');
+                                if (cameraContainer) {
+                                    cameraContainer.style.display = 'none';
+                                }
+                                refreshPage(); // ページを更新
+                            }
                         }
                     })
                     .catch(error => {
@@ -467,16 +483,29 @@
         });
         
         function handleCameraError(img) {
-            // カメラエラー時の処理
-            img.style.display = 'none';
-            document.getElementById('cameraError').style.display = 'block';
-            
-            // 5秒後に再試行
-            setTimeout(function() {
-                img.src = '/video_feed?' + new Date().getTime();
-                img.style.display = 'block';
-                document.getElementById('cameraError').style.display = 'none';
-            }, 5000);
+            // main.pyが実行中の場合のみエラー処理
+            fetch('/api/main/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.running) {
+                        // 実行中の場合はカメラエラー
+                        img.style.display = 'none';
+                        document.getElementById('cameraError').style.display = 'block';
+                        
+                        // 5秒後に再試行
+                        setTimeout(function() {
+                            img.src = '/video_feed?' + new Date().getTime();
+                            img.style.display = 'block';
+                            document.getElementById('cameraError').style.display = 'none';
+                        }, 5000);
+                    } else {
+                        // 停止中の場合は映像を非表示
+                        img.style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    console.error('状態確認エラー:', error);
+                });
         }
         
         // カメラフィードの自動更新

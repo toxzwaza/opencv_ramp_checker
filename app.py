@@ -377,41 +377,88 @@ def generate_camera_frames():
     finally:
         cap.release()
 
+def load_detection_logs():
+    """data.csvから最新の検知ログを読み込み"""
+    try:
+        if not os.path.exists('data.csv'):
+            return []
+        
+        import csv
+        logs = []
+        with open('data.csv', 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                logs.append(row)
+        
+        # 最新5件を返す
+        return logs[-5:] if logs else []
+    except Exception as e:
+        print(f"[ERROR] ログ読み込みエラー: {e}")
+        return []
+
 def add_status_overlay_web(frame):
-    """Web表示用のステータスオーバーレイを追加"""
+    """Web表示用のステータスオーバーレイを追加（main.pyと同様の表示）"""
     overlay_frame = frame.copy()
     
-    # 簡潔な状態表示
-    main_running = is_main_running()
+    # main.pyの表示と同様のオーバーレイを作成
+    y_offset = 25
+    line_height = 20
     
-    if main_running:
-        status_text = "[MONITORING ACTIVE]"
-        color = (0, 255, 0)  # 緑
-        bg_color = (0, 100, 0)
-    else:
-        status_text = "[MONITORING STOPPED]"
-        color = (0, 0, 255)  # 赤
-        bg_color = (100, 0, 0)
-    
-    # 背景付きテキストを描画
+    # タイトル
     font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 0.8
-    thickness = 2
     
-    (text_width, text_height), baseline = cv2.getTextSize(status_text, font, font_scale, thickness)
+    def draw_text_bg(img, text, pos, font_scale=0.35, color=(255, 255, 255), bg_color=(0, 0, 0), thickness=1):
+        (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, thickness)
+        x, y = pos
+        cv2.rectangle(img, (x - 5, y - text_height - 5), 
+                     (x + text_width + 5, y + baseline + 5), bg_color, -1)
+        cv2.putText(img, text, pos, font, font_scale, color, thickness)
     
-    # 背景矩形
-    cv2.rectangle(overlay_frame, (10, 10), 
-                 (text_width + 20, text_height + 20), bg_color, -1)
+    # タイトル
+    draw_text_bg(overlay_frame, "LAMP DETECTION SYSTEM", (20, y_offset), 
+                font_scale=0.5, color=(255, 255, 255), bg_color=(0, 100, 200))
+    y_offset += line_height + 5
     
-    # テキスト
-    cv2.putText(overlay_frame, status_text, (15, text_height + 15), 
-               font, font_scale, color, thickness)
+    # 現在時刻
+    time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    draw_text_bg(overlay_frame, f"TIME: {time_str}", (20, y_offset), 
+                color=(255, 255, 255), bg_color=(50, 50, 50))
+    y_offset += line_height
     
-    # 時刻表示
-    time_text = datetime.now().strftime('%H:%M:%S')
-    cv2.putText(overlay_frame, time_text, (15, frame.shape[0] - 15), 
-               font, 0.6, (255, 255, 255), 2)
+    # 実行状態
+    main_running = is_main_running()
+    if main_running:
+        mode_text = "[WEB MONITORING]"
+        mode_color = (0, 255, 255)
+        mode_bg = (100, 0, 100)
+    else:
+        mode_text = "[PREVIEW MODE]"
+        mode_color = (255, 255, 255)
+        mode_bg = (50, 50, 50)
+    
+    draw_text_bg(overlay_frame, mode_text, (20, y_offset), 
+                color=mode_color, bg_color=mode_bg)
+    y_offset += line_height + 5
+    
+    # 検知ログの表示
+    detection_logs = load_detection_logs()
+    if detection_logs:
+        draw_text_bg(overlay_frame, "RECENT DETECTIONS:", (20, y_offset), 
+                    font_scale=0.4, color=(255, 255, 255), bg_color=(100, 100, 0))
+        y_offset += line_height
+        
+        for log in detection_logs:
+            if log.get('detection_result'):
+                log_text = f"{log['timestamp'][-8:]} - {log['detection_result']}"
+                log_color = (0, 165, 255) if log['detection_result'] == 'オレンジ' else (0, 255, 0)
+                draw_text_bg(overlay_frame, log_text, (30, y_offset), 
+                           font_scale=0.3, color=log_color, bg_color=(30, 30, 30))
+                y_offset += 15
+    
+    # 操作説明
+    y_offset += 5
+    draw_text_bg(overlay_frame, "Web control available below", (20, y_offset), 
+                font_scale=0.3, color=(255, 255, 255), bg_color=(100, 0, 0))
     
     return overlay_frame
 
@@ -442,6 +489,11 @@ def stop_camera_feed():
 def video_feed():
     """ビデオストリーミングエンドポイント"""
     global camera_running
+    
+    # main.pyが実行中の場合のみストリーミングを提供
+    if not is_main_running():
+        # 停止中の場合は空のレスポンスを返す
+        return Response("", mimetype='text/plain')
     
     if not camera_running:
         start_camera_feed()
