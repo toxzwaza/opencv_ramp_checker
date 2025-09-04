@@ -84,3 +84,9 @@ timestamp,event_type,detection_result,orange_percentage,green_percentage,duratio
 2025-09-04 16:04:33,orange_start,オレンジ,100.0,0.0,0.0,debug,
 2025-09-04 16:04:35,orange_continue,オレンジ,100.0,0.0,1.0,debug,
 2025-09-04 16:09:15,orange_start,オレンジ,100.0,0.0,0.0,normal,4.png
+2025-09-04 16:17:48,orange_start,オレンジ,100.0,0.0,0.0,debug,1.png
+2025-09-04 16:17:49,orange_continue,オレンジ,100.0,0.0,1.0,debug,1.png
+2025-09-04 16:17:50,orange_continue,オレンジ,100.0,0.0,2.0,debug,4.png
+2025-09-04 16:17:51,orange_continue,オレンジ,100.0,0.0,3.1,debug,1.png
+2025-09-04 16:17:52,orange_end,緑,0.0,100.0,4.1,debug,3.png
+2025-09-04 16:17:53,green_detection,緑,0.0,100.0,0.0,debug,3.png

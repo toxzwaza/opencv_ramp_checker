@@ -62,15 +62,15 @@ def get_random_image_path():
     selected_image = random.choice(available_images)
     image_name = os.path.basename(selected_image)
     
-    print(f"🎲 ランダム選択画像: {image_name} ({len(available_images)}/4個利用可能)")
+    print(f"[RANDOM] ランダム選択画像: {image_name} ({len(available_images)}/4個利用可能)")
     return selected_image
 
 def capture_from_camera():
     """カメラから画像をキャプチャして保存"""
-    print("📷 カメラから画像をキャプチャ中...")
+    print("[CAMERA] カメラから画像をキャプチャ中...")
     
     # カメラを初期化 (通常は0番がデフォルトカメラ)
-    cap = cv2.VideoCapture(1)  # 元の設定に合わせて1番を使用
+    cap = cv2.VideoCapture(0)  # 元の設定に合わせて1番を使用
     
     if not cap.isOpened():
         print("❌ カメラにアクセスできません")
@@ -92,11 +92,11 @@ def capture_from_camera():
         
         # 画像を保存
         if cv2.imwrite(capture_path, frame):
-            print(f"✓ カメラ画像を保存: {capture_path}")
+            print(f"[OK] カメラ画像を保存: {capture_path}")
             print(f"画像サイズ: {frame.shape[1]} x {frame.shape[0]}")
             return capture_path
         else:
-            print("❌ カメラ画像の保存に失敗しました")
+            print("[ERROR] カメラ画像の保存に失敗しました")
             return None
             
     finally:
@@ -531,16 +531,16 @@ def send_notification(message):
     """通知を送信する関数（現在はコンソール出力）"""
     global debug_mode
     
-    print("\n" + "🚨" * 20)
-    print("🚨 重要な通知 🚨")
+    print("\n" + "!" * 60)
+    print("!!! 重要な通知 !!!")
     if debug_mode:
-        print("🚨 [デバッグモード] 🚨")
-    print("🚨" * 20)
-    print(f"📢 {message}")
-    print(f"🕒 通知時刻: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print("!!! [DEBUG MODE] !!!")
+    print("!" * 60)
+    print(f"MESSAGE: {message}")
+    print(f"TIME: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     if debug_mode:
-        print("⚠️ デバッグモード: 10秒間連続検知")
-    print("🚨" * 20)
+        print("WARNING: デバッグモード - 10秒間連続検知")
+    print("!" * 60)
     print()
 
 def update_detection_state(judgment, orange_percentage=0, green_percentage=0, image_file=""):
@@ -558,7 +558,7 @@ def update_detection_state(judgment, orange_percentage=0, green_percentage=0, im
             orange_detection_start_time = current_time
             notification_sent = False
             debug_info = " [デバッグモード]" if debug_mode else ""
-            print(f"🟠 オレンジ検知開始: {current_time.strftime('%H:%M:%S')}{debug_info}")
+            print(f"[ORANGE] オレンジ検知開始: {current_time.strftime('%H:%M:%S')}{debug_info}")
             
             # CSV記録: オレンジ検知開始
             log_to_csv("orange_start", judgment, orange_percentage, green_percentage, 0, image_file)
@@ -580,7 +580,7 @@ def update_detection_state(judgment, orange_percentage=0, green_percentage=0, im
                     # 残り時間を表示
                     remaining_seconds = threshold_seconds - elapsed_seconds
                     remaining_formatted = format_time_remaining(remaining_seconds)
-                    print(f"🟠 オレンジ継続中 - 通知まで残り: {remaining_formatted}")
+                    print(f"[ORANGE] オレンジ継続中 - 通知まで残り: {remaining_formatted}")
                     
                     # CSV記録: オレンジ継続
                     log_to_csv("orange_continue", judgment, orange_percentage, green_percentage, elapsed_seconds, image_file)
@@ -594,16 +594,16 @@ def update_detection_state(judgment, orange_percentage=0, green_percentage=0, im
             
             # 継続時間を強調表示
             formatted_duration = format_duration_for_display(duration)
-            print(f"🟢 緑に変化 - オレンジ状態をリセット: {current_time.strftime('%H:%M:%S')}")
-            print(f"🎯 オレンジ継続時間: {formatted_duration}")
+            print(f"[GREEN] 緑に変化 - オレンジ状態をリセット: {current_time.strftime('%H:%M:%S')}")
+            print(f"[DURATION] オレンジ継続時間: {formatted_duration}")
             
             # CSV記録: オレンジ終了
             log_to_csv("orange_end", judgment, orange_percentage, green_percentage, duration, image_file)
             
             # 即座に継続時間分析を表示
-            print(f"\n" + "="*30 + " 改善データ " + "="*30)
+            print(f"\n" + "="*25 + " 改善データ " + "="*25)
             analyze_orange_durations()
-            print("="*73)
+            print("="*60)
         else:
             # CSV記録: 緑検知
             log_to_csv("green_detection", judgment, orange_percentage, green_percentage, 0, image_file)
@@ -618,7 +618,7 @@ def update_detection_state(judgment, orange_percentage=0, green_percentage=0, im
             # オレンジから不明に変化 - 継続時間を計算
             elapsed_time = current_time - orange_detection_start_time
             duration = elapsed_time.total_seconds()
-            print(f"❓ 検知不明 - オレンジ状態をリセット: {current_time.strftime('%H:%M:%S')}")
+            print(f"[UNKNOWN] 検知不明 - オレンジ状態をリセット: {current_time.strftime('%H:%M:%S')}")
             
             # CSV記録: オレンジ中断
             log_to_csv("orange_interrupted", judgment, orange_percentage, green_percentage, duration, image_file)
@@ -674,7 +674,7 @@ def initialize_csv_log():
                 "debug_mode",
                 "image_file"
             ])
-        print(f"📊 CSVログファイルを作成しました: {csv_file}")
+        print(f"[CSV] CSVログファイルを作成しました: {csv_file}")
 
 def log_to_csv(event_type, detection_result, orange_percentage=0, green_percentage=0, duration_seconds=0, image_file=""):
     """検知イベントをCSVに記録"""
@@ -701,10 +701,10 @@ def log_to_csv(event_type, detection_result, orange_percentage=0, green_percenta
         if event_type == "orange_end" and duration_seconds > 0:
             time_unit = "秒" if debug_mode else "分"
             display_duration = duration_seconds if debug_mode else duration_seconds / 60
-            print(f"📊 【重要】オレンジ継続時間: {display_duration:.1f}{time_unit}")
-            print(f"📝 CSVに記録: {event_type} - {detection_result} (継続時間: {duration_seconds:.1f}秒, 画像: {image_file})")
+            print(f"[IMPORTANT] オレンジ継続時間: {display_duration:.1f}{time_unit}")
+            print(f"[CSV] 記録: {event_type} - {detection_result} (継続時間: {duration_seconds:.1f}秒, 画像: {image_file})")
         else:
-            print(f"📝 CSVに記録: {event_type} - {detection_result}")
+            print(f"[CSV] 記録: {event_type} - {detection_result}")
     except Exception as e:
         print(f"❌ CSV記録エラー: {e}")
 
@@ -1026,10 +1026,10 @@ def display_menu():
     """メニューを表示"""
     global debug_mode
     
-    print("\n🚦 ランプ色判定統合システム")
+    print("\n[LAMP] ランプ色判定統合システム")
     print("=" * 60)
     print("実行モードを選択してください:")
-    print("1. ランダム画像 (1.png～4.png) - 1回実行")
+    print("1. ランダム画像 (1.png-4.png) - 1回実行")
     print("2. カメラキャプチャ - 1回実行")
     interval_text = "1秒毎" if debug_mode else "1分毎"
     print(f"3. ランダム画像 - {interval_text}ループ実行")
@@ -1038,7 +1038,8 @@ def display_menu():
     print("6. デバッグモード設定")
     print("7. オレンジ継続時間分析レポート")
     print("=" * 60)
-    print(f"現在のモード: {'🐛 デバッグ (10秒)' if debug_mode else '⏰ 通常 (10分)'}")
+    debug_indicator = "[DEBUG] デバッグ (10秒)" if debug_mode else "[NORMAL] 通常 (10分)"
+    print(f"現在のモード: {debug_indicator}")
 
 def select_mode():
     """実行モードを選択"""
