@@ -128,6 +128,243 @@ def capture_from_camera():
         cap.release()
         print("カメラを正常に閉じました")
 
+def draw_text_with_background(image, text, position, font_scale=0.7, color=(255, 255, 255), bg_color=(0, 0, 0), thickness=2):
+    """背景付きでテキストを描画"""
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    
+    # テキストサイズを取得
+    (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, thickness)
+    
+    # 背景矩形を描画
+    x, y = position
+    cv2.rectangle(image, (x - 5, y - text_height - 5), 
+                 (x + text_width + 5, y + baseline + 5), bg_color, -1)
+    
+    # テキストを描画
+    cv2.putText(image, text, position, font, font_scale, color, thickness)
+
+def create_status_overlay(frame, detection_logs, current_time):
+    """ステータス情報をオーバーレイで表示"""
+    global current_state, orange_detection_start_time, notification_sent, debug_mode
+    
+    overlay_frame = frame.copy()
+    y_offset = 40
+    line_height = 35
+    
+    # タイトル
+    draw_text_with_background(overlay_frame, "LAMP DETECTION SYSTEM", (20, y_offset), 
+                             font_scale=1.0, color=(255, 255, 255), bg_color=(0, 100, 200))
+    y_offset += line_height + 10
+    
+    # 現在時刻
+    time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    draw_text_with_background(overlay_frame, f"TIME: {time_str}", (20, y_offset), 
+                             color=(255, 255, 255), bg_color=(50, 50, 50))
+    y_offset += line_height
+    
+    # デバッグモード表示
+    mode_text = "[DEBUG MODE]" if debug_mode else "[NORMAL MODE]"
+    mode_color = (0, 255, 255) if debug_mode else (255, 255, 255)
+    mode_bg = (100, 0, 100) if debug_mode else (50, 50, 50)
+    draw_text_with_background(overlay_frame, mode_text, (20, y_offset), 
+                             color=mode_color, bg_color=mode_bg)
+    y_offset += line_height + 10
+    
+    # 現在の検知状態
+    if current_state == True:
+        status_text = "[ORANGE DETECTED]"
+        status_color = (0, 165, 255)  # オレンジ色
+        status_bg = (0, 50, 100)
+        
+        if orange_detection_start_time:
+            elapsed = time.time() - orange_detection_start_time.timestamp()
+            time_unit = "s" if debug_mode else "min"
+            display_time = elapsed if debug_mode else elapsed / 60
+            duration_text = f"Duration: {display_time:.1f}{time_unit}"
+            
+            # 通知までの残り時間
+            threshold_seconds = get_notification_threshold()
+            remaining = max(0, threshold_seconds - elapsed)
+            remaining_unit = "s" if debug_mode else "min"
+            remaining_display = remaining if debug_mode else remaining / 60
+            
+            if remaining > 0:
+                remaining_text = f"Alert in: {remaining_display:.1f}{remaining_unit}"
+            else:
+                remaining_text = "ALERT SENT" if notification_sent else "ALERT READY"
+    else:
+        status_text = "[GREEN/NONE DETECTED]"
+        status_color = (0, 255, 0)  # 緑色
+        status_bg = (0, 100, 0)
+        duration_text = "Duration: --"
+        remaining_text = "Alert: --"
+    
+    draw_text_with_background(overlay_frame, status_text, (20, y_offset), 
+                             font_scale=1.0, color=status_color, bg_color=status_bg)
+    y_offset += line_height
+    
+    draw_text_with_background(overlay_frame, duration_text, (20, y_offset), 
+                             color=(255, 255, 255), bg_color=(50, 50, 50))
+    y_offset += line_height
+    
+    draw_text_with_background(overlay_frame, remaining_text, (20, y_offset), 
+                             color=(255, 255, 255), bg_color=(50, 50, 50))
+    y_offset += line_height + 10
+    
+    # 検知ログの表示（最新5件）
+    if detection_logs:
+        draw_text_with_background(overlay_frame, "RECENT DETECTIONS:", (20, y_offset), 
+                                 color=(255, 255, 255), bg_color=(100, 100, 0))
+        y_offset += line_height
+        
+        recent_logs = detection_logs[-5:]  # 最新5件
+        for log in recent_logs:
+            log_color = (0, 165, 255) if "ORANGE" in log else (0, 255, 0)
+            draw_text_with_background(overlay_frame, log, (30, y_offset), 
+                                     font_scale=0.6, color=log_color, bg_color=(30, 30, 30))
+            y_offset += 25
+    
+    # 操作説明
+    y_offset += 10
+    draw_text_with_background(overlay_frame, "Press ESC or 'q' to quit", (20, y_offset), 
+                             font_scale=0.6, color=(255, 255, 255), bg_color=(100, 0, 0))
+    
+    return overlay_frame
+
+def run_camera_with_live_display():
+    """カメラ映像を常時表示しながら定期的に色検出を実行"""
+    global current_state, orange_detection_start_time, notification_sent, debug_mode
+    
+    print("[CAMERA] ライブカメラモード開始")
+    print("=" * 60)
+    
+    # 利用可能なカメラを検索
+    camera_index = find_available_camera()
+    if camera_index is None:
+        print("[ERROR] カメラが利用できません")
+        return False
+    
+    # カメラを初期化
+    cap = cv2.VideoCapture(camera_index)
+    if not cap.isOpened():
+        print(f"[ERROR] カメラデバイス {camera_index} を開けませんでした")
+        return False
+    
+    # 初期状態をリセット
+    current_state = None
+    orange_detection_start_time = None
+    notification_sent = False
+    
+    # CSVログファイルを初期化
+    initialize_csv_log()
+    
+    # 検知間隔の設定
+    detection_interval = 1 if debug_mode else 60  # デバッグ: 1秒, 通常: 60秒
+    last_detection_time = 0
+    
+    time_unit = get_time_unit()
+    threshold_value = 10
+    
+    print(f"カメラ映像: 全画面リアルタイム表示")
+    print(f"色検出間隔: {detection_interval}秒")
+    print(f"[ORANGE] オレンジ{threshold_value}{time_unit}間連続検知で通知送信")
+    if debug_mode:
+        print("[WARNING] デバッグモード: 時間単位が秒に変更されています")
+    print("ESCキーまたは'q'キーで終了")
+    print("=" * 60)
+    
+    # 検知ログを保持
+    detection_logs = []
+    
+    # 全画面表示用のウィンドウを作成
+    window_name = 'Live Camera Feed - LAMP DETECTION'
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    
+    try:
+        while True:
+            # フレームをキャプチャ
+            ret, frame = cap.read()
+            if not ret:
+                detection_logs.append(f"{datetime.now().strftime('%H:%M:%S')} - ERROR: Frame capture failed")
+                break
+            
+            # 現在時刻
+            current_time_unix = time.time()
+            current_datetime = datetime.now()
+            
+            # 定期的に色検出を実行
+            if current_time_unix - last_detection_time >= detection_interval:
+                last_detection_time = current_time_unix
+                
+                # 現在のフレームを保存
+                timestamp = current_datetime.strftime("%Y%m%d_%H%M%S")
+                temp_filename = f"temp_frame_{timestamp}.png"
+                temp_path = os.path.join("sample_img", temp_filename)
+                
+                if cv2.imwrite(temp_path, frame):
+                    detection_logs.append(f"{current_datetime.strftime('%H:%M:%S')} - DETECTION: Processing...")
+                    
+                    # 色検出処理を実行（コンソール出力を抑制）
+                    # process_single_analysis の代わりに直接処理
+                    if crop_and_save_all_colors(temp_path):
+                        results = run_analysis_silent()  # 静音版の分析
+                        if results and len(results) == 2:
+                            judgment, confidence, reasons, scores = comprehensive_judgment(results)
+                            
+                            # 検知結果から割合を取得
+                            orange_percentage = 0
+                            green_percentage = 0
+                            for result in results:
+                                if result['expected_color'] == 'オレンジ':
+                                    orange_percentage = result['percentage']
+                                elif result['expected_color'] == '緑':
+                                    green_percentage = result['percentage']
+                            
+                            # フラグ状態を更新
+                            detection_state = update_detection_state(judgment, orange_percentage, green_percentage, os.path.basename(temp_path))
+                            
+                            # ログに記録
+                            log_entry = f"{current_datetime.strftime('%H:%M:%S')} - {judgment} (O:{orange_percentage:.1f}% G:{green_percentage:.1f}%)"
+                            detection_logs.append(log_entry)
+                            
+                            # ログが多すぎる場合は古いものを削除
+                            if len(detection_logs) > 10:
+                                detection_logs = detection_logs[-10:]
+                    
+                    # 一時ファイルを削除
+                    try:
+                        os.remove(temp_path)
+                    except:
+                        pass
+            
+            # ステータス情報をオーバーレイして表示
+            display_frame = create_status_overlay(frame, detection_logs, current_time_unix)
+            
+            # 次回検知までの時間をオーバーレイ
+            next_detection_in = detection_interval - (current_time_unix - last_detection_time)
+            if next_detection_in > 0:
+                next_text = f"Next detection: {next_detection_in:.0f}s"
+                draw_text_with_background(display_frame, next_text, (20, frame.shape[0] - 50), 
+                                        color=(255, 255, 0), bg_color=(50, 50, 0))
+            
+            cv2.imshow(window_name, display_frame)
+            
+            # キー入力をチェック
+            key = cv2.waitKey(1) & 0xFF
+            if key == 27 or key == ord('q'):  # ESCキーまたは'q'キーで終了
+                print("\n[EXIT] ユーザーによる終了要求")
+                break
+                
+    except KeyboardInterrupt:
+        print("\n[EXIT] キーボード割り込みで終了")
+    
+    finally:
+        cap.release()
+        cv2.destroyAllWindows()
+        print("[CAMERA] カメラとウィンドウを正常に閉じました")
+        return True
+
 def get_color_coordinates():
     """各色の座標範囲を定義"""
     color_coordinates = {
@@ -834,6 +1071,72 @@ def run_analysis():
     
     return results
 
+def run_analysis_silent():
+    """分析を実行（コンソール出力を抑制）"""
+    # 分析対象ファイルと期待色の定義
+    target_files = [
+        ("green.png", "緑"),
+        ("orange.png", "オレンジ")
+    ]
+    
+    results = []
+    
+    # 各ファイルを分析
+    for filename, expected_color in target_files:
+        image_path = os.path.join("sample_img", filename)
+        result = analyze_single_image_silent(image_path, expected_color)
+        if result:
+            results.append(result)
+    
+    return results
+
+def analyze_single_image_silent(image_path, expected_color):
+    """単一画像で期待される色の含有率を分析（静音版）"""
+    image = load_image(image_path)
+    if image is None:
+        return None
+    
+    # 色分析
+    color_pixels = analyze_lamp_color(image)
+    if not color_pixels:
+        return None
+    
+    # 期待される色のピクセル数を取得
+    expected_pixels = color_pixels.get(expected_color, 0)
+    total_pixels = sum(color_pixels.values())
+    
+    if total_pixels > 0:
+        percentage = (expected_pixels / total_pixels) * 100
+    else:
+        percentage = 0
+    
+    # 明度分析
+    is_bright, brightness = analyze_brightness_silent(image)
+    
+    result = {
+        'file_name': os.path.basename(image_path),
+        'expected_color': expected_color,
+        'expected_pixels': expected_pixels,
+        'total_color_pixels': total_pixels,
+        'percentage': percentage,
+        'is_bright': is_bright,
+        'brightness': brightness,
+        'all_colors': color_pixels
+    }
+    
+    return result
+
+def analyze_brightness_silent(image):
+    """画像の明度を分析（静音版）"""
+    if image is None:
+        return False, 0
+    
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    mean_brightness = np.mean(gray)
+    is_bright = mean_brightness > 100  # 閾値
+    
+    return is_bright, mean_brightness
+
 # ========================================
 # メイン統合処理
 # ========================================
@@ -1058,7 +1361,7 @@ def display_menu():
     print("2. カメラキャプチャ - 1回実行")
     interval_text = "1秒毎" if debug_mode else "1分毎"
     print(f"3. ランダム画像 - {interval_text}ループ実行")
-    print(f"4. カメラキャプチャ - {interval_text}ループ実行")
+    print(f"4. ライブカメラ - 映像表示+{interval_text}色検出")
     print("5. 色検出校正ツール (green/orange)")
     print("6. デバッグモード設定")
     print("7. オレンジ継続時間分析レポート")
@@ -1118,8 +1421,7 @@ def main():
         interval = 1/60 if debug_mode else 1  # デバッグモード: 1秒, 通常: 1分
         run_loop_mode("fixed", interval)
     elif mode == "camera_loop":
-        interval = 1/60 if debug_mode else 1  # デバッグモード: 1秒, 通常: 1分
-        run_loop_mode("camera", interval)
+        run_camera_with_live_display()
     elif mode == "calibrate":
         # 校正モード
         image_path = get_random_image_path()
