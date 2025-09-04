@@ -128,7 +128,7 @@ def capture_from_camera():
         cap.release()
         print("カメラを正常に閉じました")
 
-def draw_text_with_background(image, text, position, font_scale=0.7, color=(255, 255, 255), bg_color=(0, 0, 0), thickness=2):
+def draw_text_with_background(image, text, position, font_scale=0.35, color=(255, 255, 255), bg_color=(0, 0, 0), thickness=1):
     """背景付きでテキストを描画"""
     font = cv2.FONT_HERSHEY_SIMPLEX
     
@@ -148,13 +148,13 @@ def create_status_overlay(frame, detection_logs, current_time):
     global current_state, orange_detection_start_time, notification_sent, debug_mode
     
     overlay_frame = frame.copy()
-    y_offset = 40
-    line_height = 35
+    y_offset = 25
+    line_height = 20
     
     # タイトル
     draw_text_with_background(overlay_frame, "LAMP DETECTION SYSTEM", (20, y_offset), 
-                             font_scale=1.0, color=(255, 255, 255), bg_color=(0, 100, 200))
-    y_offset += line_height + 10
+                             font_scale=0.5, color=(255, 255, 255), bg_color=(0, 100, 200))
+    y_offset += line_height + 5
     
     # 現在時刻
     time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -168,7 +168,7 @@ def create_status_overlay(frame, detection_logs, current_time):
     mode_bg = (100, 0, 100) if debug_mode else (50, 50, 50)
     draw_text_with_background(overlay_frame, mode_text, (20, y_offset), 
                              color=mode_color, bg_color=mode_bg)
-    y_offset += line_height + 10
+    y_offset += line_height + 5
     
     # 現在の検知状態
     if current_state == True:
@@ -200,7 +200,7 @@ def create_status_overlay(frame, detection_logs, current_time):
         remaining_text = "Alert: --"
     
     draw_text_with_background(overlay_frame, status_text, (20, y_offset), 
-                             font_scale=1.0, color=status_color, bg_color=status_bg)
+                             font_scale=0.5, color=status_color, bg_color=status_bg)
     y_offset += line_height
     
     draw_text_with_background(overlay_frame, duration_text, (20, y_offset), 
@@ -209,25 +209,25 @@ def create_status_overlay(frame, detection_logs, current_time):
     
     draw_text_with_background(overlay_frame, remaining_text, (20, y_offset), 
                              color=(255, 255, 255), bg_color=(50, 50, 50))
-    y_offset += line_height + 10
+    y_offset += line_height + 5
     
     # 検知ログの表示（最新5件）
     if detection_logs:
         draw_text_with_background(overlay_frame, "RECENT DETECTIONS:", (20, y_offset), 
-                                 color=(255, 255, 255), bg_color=(100, 100, 0))
+                                 font_scale=0.4, color=(255, 255, 255), bg_color=(100, 100, 0))
         y_offset += line_height
         
         recent_logs = detection_logs[-5:]  # 最新5件
         for log in recent_logs:
             log_color = (0, 165, 255) if "ORANGE" in log else (0, 255, 0)
             draw_text_with_background(overlay_frame, log, (30, y_offset), 
-                                     font_scale=0.6, color=log_color, bg_color=(30, 30, 30))
-            y_offset += 25
+                                     font_scale=0.3, color=log_color, bg_color=(30, 30, 30))
+            y_offset += 15
     
     # 操作説明
-    y_offset += 10
+    y_offset += 5
     draw_text_with_background(overlay_frame, "Press ESC or 'q' to quit", (20, y_offset), 
-                             font_scale=0.6, color=(255, 255, 255), bg_color=(100, 0, 0))
+                             font_scale=0.3, color=(255, 255, 255), bg_color=(100, 0, 0))
     
     return overlay_frame
 
@@ -345,8 +345,8 @@ def run_camera_with_live_display():
             next_detection_in = detection_interval - (current_time_unix - last_detection_time)
             if next_detection_in > 0:
                 next_text = f"Next detection: {next_detection_in:.0f}s"
-                draw_text_with_background(display_frame, next_text, (20, frame.shape[0] - 50), 
-                                        color=(255, 255, 0), bg_color=(50, 50, 0))
+                draw_text_with_background(display_frame, next_text, (20, frame.shape[0] - 30), 
+                                        font_scale=0.4, color=(255, 255, 0), bg_color=(50, 50, 0))
             
             cv2.imshow(window_name, display_frame)
             
