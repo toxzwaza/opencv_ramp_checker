@@ -96,13 +96,17 @@ def start_main_process():
         return False
     
     try:
-        # main.pyを別プロセスで実行
+        # main.pyを別プロセスで実行（カメラモードで自動実行）
+        # 環境変数でメニュー選択を自動化
+        env = os.environ.copy()
+        env['LAMP_AUTO_MODE'] = '4'  # ライブカメラモードを自動選択
+        
         main_process = subprocess.Popen(
-            ['python', 'main.py'],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            universal_newlines=True,
-            bufsize=1
+            ['python', 'main_auto.py'],  # 自動実行版を使用
+            env=env,
+            creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0,  # Windowsで新しいコンソールを作成
+            stdout=None,  # 出力をブロックしない
+            stderr=None
         )
         print(f"[INFO] main.pyを開始しました (PID: {main_process.pid})")
         return True

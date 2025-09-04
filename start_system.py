@@ -40,11 +40,17 @@ class SystemManager:
         """main.pyを開始"""
         try:
             print(f"[{datetime.now().strftime('%H:%M:%S')}] カメラ監視システムを開始中...")
+            
+            # 環境変数でライブカメラモードを指定
+            env = os.environ.copy()
+            env['LAMP_AUTO_MODE'] = '4'
+            
             self.main_process = subprocess.Popen(
-                ['python', 'main.py'],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                universal_newlines=True
+                ['python', 'main_auto.py'],
+                env=env,
+                creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0,
+                stdout=None,
+                stderr=None
             )
             print(f"[{datetime.now().strftime('%H:%M:%S')}] カメラ監視システムが開始されました (PID: {self.main_process.pid})")
             return True
@@ -122,12 +128,14 @@ class SystemManager:
             if not self.start_flask_app():
                 return False
             
-            # 少し待機してからmain.pyを開始
+            # 少し待機
             time.sleep(3)
             
             print(f"\n[{datetime.now().strftime('%H:%M:%S')}] システム起動完了!")
             print("🌐 Webアプリにアクセス: http://localhost:5000")
             print("⚙️ 設定編集: http://localhost:5000/settings")
+            print("📍 座標設定: http://localhost:5000/coordinates")
+            print("📝 注意: カメラ監視システムはWebアプリから手動で開始してください")
             print("🛑 終了: Ctrl+C")
             print("=" * 80)
             

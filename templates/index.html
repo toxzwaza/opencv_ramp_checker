@@ -256,8 +256,9 @@
                     <button class="btn btn-danger" onclick="stopMain()">🛑 停止</button>
                     <button class="btn btn-warning" onclick="showRestartDialog()">🔄 再起動</button>
                 {% else %}
-                    <button class="btn btn-success" onclick="startMain()">▶️ 開始</button>
+                    <button class="btn btn-success" onclick="startMain()">▶️ 開始 (ライブカメラモード)</button>
                 {% endif %}
+                <button class="btn btn-primary" onclick="checkMainStatus()">📊 状態確認</button>
             </div>
         </div>
         
@@ -411,7 +412,25 @@
                     }
                 })
                 .catch(error => {
-                    alert('❌ 通信エラー: ' + error);
+                                            alert('❌ 通信エラー: ' + error);
+                    });
+        }
+        
+        function checkMainStatus() {
+            fetch('/api/main/status')
+                .then(response => response.json())
+                .then(data => {
+                    let statusMessage = `システム状態:\n`;
+                    statusMessage += `実行状態: ${data.running ? '実行中' : '停止中'}\n`;
+                    if (data.pid) {
+                        statusMessage += `プロセスID: ${data.pid}\n`;
+                    }
+                    statusMessage += `確認時刻: ${new Date().toLocaleString()}`;
+                    
+                    alert(statusMessage);
+                })
+                .catch(error => {
+                    alert('❌ 状態確認エラー: ' + error);
                 });
         }
         
