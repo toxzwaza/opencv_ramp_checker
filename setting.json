@@ -10,9 +10,11 @@
     "debug_detection_interval_seconds": 1,
     "notification_threshold_minutes": 10,
     "debug_notification_threshold_seconds": 10,
-    "color_detection_threshold_percentage": 30.0,
+    "color_detection_threshold_percentage": 50.0,
     "brightness_threshold": 100.0,
-    "brightness_threshold_high": 80.0
+    "brightness_threshold_high": 100.0,
+    "minimum_pixel_count": 100,
+    "color_detection_mode": "strict"
   },
   "coordinates": {
     "orange": {
@@ -61,6 +63,24 @@
         "s_min": 30,
         "v_min": 30,
         "h_max": 85,
+        "s_max": 255,
+        "v_max": 255
+      }
+    },
+    "strict": {
+      "orange": {
+        "h_min": 12,
+        "s_min": 80,
+        "v_min": 80,
+        "h_max": 25,
+        "s_max": 255,
+        "v_max": 255
+      },
+      "green": {
+        "h_min": 45,
+        "s_min": 80,
+        "v_min": 80,
+        "h_max": 75,
         "s_max": 255,
         "v_max": 255
       }

@@ -643,6 +643,31 @@ def get_enhanced_color_ranges():
         ]
     }
 
+def get_strict_color_ranges():
+    """誤検知を減らす厳格な色範囲設定"""
+    return {
+        'オレンジ': [
+            # より狭い範囲で明度・彩度の下限を上げる
+            (np.array([12, 80, 80]), np.array([25, 255, 255]))      # オレンジ色（厳格）
+        ],
+        '緑': [
+            # より狭い範囲で明度・彩度の下限を上げる  
+            (np.array([45, 80, 80]), np.array([75, 255, 255]))      # 緑色（厳格）
+        ]
+    }
+
+def get_adaptive_color_ranges():
+    """設定ファイルから動的に色範囲を取得"""
+    # 設定ファイルから色範囲を取得（厳格モードを優先）
+    color_mode = get_setting('detection.color_detection_mode', 'strict')
+    
+    if color_mode == 'strict':
+        return get_strict_color_ranges()
+    elif color_mode == 'enhanced':
+        return get_enhanced_color_ranges()
+    else:
+        return get_default_color_ranges()
+
 def create_custom_color_ranges(orange_ranges=None, green_ranges=None):
     """カスタム色範囲を作成"""
     custom_ranges = {}
@@ -672,9 +697,9 @@ def analyze_lamp_color(image, color_ranges=None, apply_preprocessing=True):
     # BGR から HSV 色空間に変換
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     
-    # 色範囲が指定されていない場合は拡張版を使用
+    # 色範囲が指定されていない場合は適応的範囲を使用
     if color_ranges is None:
-        color_ranges = get_enhanced_color_ranges()
+        color_ranges = get_adaptive_color_ranges()
     
     color_pixels = {}
     
@@ -717,10 +742,11 @@ def calibrate_color_detection(image_path):
     print(f"画像を読み込みました: {os.path.basename(image_path)}")
     print("画像サイズ:", image.shape[1], "x", image.shape[0])
     
-    # デフォルト、拡張、カスタムの3つのモードで比較
+    # デフォルト、拡張、厳格の3つのモードで比較
     modes = {
         "デフォルト": get_default_color_ranges(),
-        "拡張版": get_enhanced_color_ranges()
+        "拡張版": get_enhanced_color_ranges(),
+        "厳格版": get_strict_color_ranges()
     }
     
     print("\n📊 各モードでの検出結果:")
@@ -750,28 +776,31 @@ def calibrate_color_detection(image_path):
     # カスタム調整の提案
     print(f"\n⚙️ カスタム調整オプション:")
     print("1. デフォルト設定を使用")
-    print("2. 拡張設定を使用（推奨）")
-    print("3. 手動で色範囲を調整")
-    print("4. 視覚的に色範囲を確認")
+    print("2. 拡張設定を使用")
+    print("3. 厳格設定を使用（誤検知対策）")
+    print("4. 手動で色範囲を調整")
+    print("5. 視覚的に色範囲を確認")
     
     while True:
         try:
-            choice = input("選択してください (1-4): ").strip()
+            choice = input("選択してください (1-5): ").strip()
             
             if choice == "1":
                 return get_default_color_ranges()
             elif choice == "2":
                 return get_enhanced_color_ranges()
             elif choice == "3":
-                return manual_color_adjustment()
+                return get_strict_color_ranges()
             elif choice == "4":
-                visual_color_range_check(image, modes["拡張版"])
+                return manual_color_adjustment()
+            elif choice == "5":
+                visual_color_range_check(image, modes["厳格版"])
                 continue
             else:
-                print("無効な選択です。1-4の数字を入力してください。")
+                print("無効な選択です。1-5の数字を入力してください。")
         except KeyboardInterrupt:
             print("\n校正を終了します")
-            return get_enhanced_color_ranges()
+            return get_strict_color_ranges()
 
 def manual_color_adjustment():
     """手動で色範囲を調整"""
@@ -887,59 +916,97 @@ def analyze_single_image(image_path, expected_color):
     return result
 
 def comprehensive_judgment(results):
-    """総合的な判定を行う"""
+    """総合的な判定を行う（誤検知対策強化版）"""
     if not results or len(results) != 2:
         return "判定不可", 0, ["分析結果が不完全です"]
     
+    # 設定から動的に閾値を取得
+    threshold = get_setting('detection.color_detection_threshold_percentage', 50.0)  # デフォルトを50%に上昇
+    brightness_threshold = get_setting('detection.brightness_threshold_high', 100.0)  # 明度閾値も上昇
+    minimum_pixel_count = get_setting('detection.minimum_pixel_count', 100)  # 最小ピクセル数
+    
     # 各ファイルの結果を評価
     scores = {}
-    threshold = 30.0  # 期待色の最小割合閾値
-    brightness_threshold = 80.0  # 明度閾値
     
     for result in results:
         color = result['expected_color']
         percentage = result['percentage']
         brightness = result['brightness']
+        expected_pixels = result['expected_pixels']
+        total_pixels = result['total_color_pixels']
         
-        # スコア計算（期待色割合 + 明度ボーナス）
-        score = percentage
-        if brightness > brightness_threshold:
-            score += 10  # 明度ボーナス
+        # 複数条件での検証
+        meets_percentage_threshold = percentage >= threshold
+        meets_brightness_threshold = brightness >= brightness_threshold
+        meets_pixel_threshold = expected_pixels >= minimum_pixel_count
+        
+        # スコア計算（より厳格な条件）
+        score = 0
+        if meets_percentage_threshold:
+            score += percentage
+        if meets_brightness_threshold:
+            score += 15  # 明度ボーナス増加
+        if meets_pixel_threshold:
+            score += 10  # ピクセル数ボーナス
+        
+        # 総合判定条件
+        all_conditions_met = (meets_percentage_threshold and 
+                             meets_brightness_threshold and 
+                             meets_pixel_threshold)
         
         scores[color] = {
             'score': score,
             'percentage': percentage,
             'brightness': brightness,
-            'meets_threshold': percentage >= threshold
+            'expected_pixels': expected_pixels,
+            'total_pixels': total_pixels,
+            'meets_percentage_threshold': meets_percentage_threshold,
+            'meets_brightness_threshold': meets_brightness_threshold,
+            'meets_pixel_threshold': meets_pixel_threshold,
+            'all_conditions_met': all_conditions_met
         }
     
-    # 最高スコアの色を判定
-    best_color = max(scores.items(), key=lambda x: x[1]['score'])
+    # 全条件を満たす色があるかチェック
+    valid_colors = [(color, data) for color, data in scores.items() if data['all_conditions_met']]
+    
+    if not valid_colors:
+        # どの色も全条件を満たさない場合
+        judgment = "不明"
+        confidence = 0
+        reasons = [
+            f"すべての色が厳格な判定条件を満たしませんでした",
+            f"必要条件: 含有率≥{threshold}%, 明度≥{brightness_threshold}, ピクセル数≥{minimum_pixel_count}"
+        ]
+        return judgment, confidence, reasons, scores
+    
+    # 最高スコアの色を判定（全条件を満たす色の中から）
+    best_color = max(valid_colors, key=lambda x: x[1]['score'])
     color_name, color_data = best_color
     
     # 判定理由を生成
     reasons = []
+    reasons.append(f"{color_name}が全ての判定条件を満たしました:")
+    reasons.append(f"  含有率: {color_data['percentage']:.1f}% (閾値: {threshold}%)")
+    reasons.append(f"  明度: {color_data['brightness']:.1f} (閾値: {brightness_threshold})")
+    reasons.append(f"  検出ピクセル数: {color_data['expected_pixels']} (閾値: {minimum_pixel_count})")
     
-    if color_data['meets_threshold']:
-        reasons.append(f"{color_name}の含有率が{color_data['percentage']:.1f}%で閾値({threshold}%)を超過")
-    
-    if color_data['brightness'] > brightness_threshold:
-        reasons.append(f"十分な明度({color_data['brightness']:.1f})を検出")
-    
-    # 他の色との比較
+    # 他の色の状況も報告
     other_colors = [c for c in scores.keys() if c != color_name]
     for other_color in other_colors:
-        if scores[other_color]['percentage'] < threshold:
-            reasons.append(f"{other_color}は含有率{scores[other_color]['percentage']:.1f}%で閾値未満")
+        other_data = scores[other_color]
+        if not other_data['all_conditions_met']:
+            failed_conditions = []
+            if not other_data['meets_percentage_threshold']:
+                failed_conditions.append(f"含有率{other_data['percentage']:.1f}%")
+            if not other_data['meets_brightness_threshold']:
+                failed_conditions.append(f"明度{other_data['brightness']:.1f}")
+            if not other_data['meets_pixel_threshold']:
+                failed_conditions.append(f"ピクセル数{other_data['expected_pixels']}")
+            reasons.append(f"{other_color}は条件不足: {', '.join(failed_conditions)}")
     
     # 最終判定
-    if color_data['meets_threshold']:
-        judgment = color_name
-        confidence = min(95, color_data['score'])  # 最大95%
-    else:
-        judgment = "不明"
-        confidence = 0
-        reasons = ["すべての色が閾値を下回りました"]
+    judgment = color_name
+    confidence = min(95, color_data['score'])  # 最大95%
     
     return judgment, confidence, reasons, scores
 
@@ -1375,13 +1442,17 @@ def process_single_analysis(image_path, mode="固定ファイル"):
     for result in results:
         color = result['expected_color']
         score_data = scores[color]
-        status = "🟢" if score_data['meets_threshold'] else "🔴"
+        status = "🟢" if score_data['all_conditions_met'] else "🔴"
         
         print(f"{status} {result['file_name']}:")
         print(f"   期待色({color}): {result['percentage']:.1f}%")
         print(f"   明度: {result['brightness']:.1f}")
+        print(f"   検出ピクセル数: {result['expected_pixels']}")
         print(f"   スコア: {score_data['score']:.1f}")
-        print(f"   閾値クリア: {'✓' if score_data['meets_threshold'] else '✗'}")
+        print(f"   全条件クリア: {'✓' if score_data['all_conditions_met'] else '✗'}")
+        print(f"   - 含有率条件: {'✓' if score_data['meets_percentage_threshold'] else '✗'}")
+        print(f"   - 明度条件: {'✓' if score_data['meets_brightness_threshold'] else '✗'}")
+        print(f"   - ピクセル数条件: {'✓' if score_data['meets_pixel_threshold'] else '✗'}")
         print()
     
     # 最終判定結果
@@ -1398,8 +1469,9 @@ def process_single_analysis(image_path, mode="固定ファイル"):
     # サマリー
     print(f"\n📋 分析サマリー:")
     print("-" * 30)
+    threshold = get_setting('detection.color_detection_threshold_percentage', 50.0)
     for result in results:
-        status = "🟢" if result['percentage'] >= 30 else "🔴"
+        status = "🟢" if result['percentage'] >= threshold else "🔴"
         print(f"{status} {result['file_name']}: {result['expected_color']} {result['percentage']:.1f}%")
     
     # 検知結果から割合を取得
@@ -1446,6 +1518,18 @@ def run_fixed_file_mode():
     """ランダム画像ファイルモードで実行"""
     image_path = get_random_image_path()
     return process_single_analysis(image_path, "ランダム画像")
+
+def run_target_file_mode():
+    """target.pngファイルモードで実行"""
+    target_path = os.path.join("sample_img", "target.png")
+    
+    if not os.path.exists(target_path):
+        print(f"❌ {target_path} が見つかりません")
+        print("sample_imgフォルダにtarget.pngファイルを配置してください")
+        return False
+    
+    print(f"📁 対象ファイル: {target_path}")
+    return process_single_analysis(target_path, "target.png")
 
 def run_camera_mode():
     """カメラモードで実行"""
@@ -1547,12 +1631,13 @@ def display_menu():
     print("実行モードを選択してください:")
     print("1. ランダム画像 (1.png-4.png) - 1回実行")
     print("2. カメラキャプチャ - 1回実行")
+    print("3. target.png - 1回実行")
     interval_text = "1秒毎" if debug_mode else "1分毎"
-    print(f"3. ランダム画像 - {interval_text}ループ実行")
-    print(f"4. ライブカメラ - 映像表示+{interval_text}色検出")
-    print("5. 色検出校正ツール (green/orange)")
-    print("6. デバッグモード設定")
-    print("7. オレンジ継続時間分析レポート")
+    print(f"4. ランダム画像 - {interval_text}ループ実行")
+    print(f"5. ライブカメラ - 映像表示+{interval_text}色検出")
+    print("6. 色検出校正ツール (green/orange)")
+    print("7. デバッグモード設定")
+    print("8. オレンジ継続時間分析レポート")
     print("=" * 60)
     debug_indicator = "[DEBUG] デバッグ (10秒)" if debug_mode else "[NORMAL] 通常 (10分)"
     print(f"現在のモード: {debug_indicator}")
@@ -1565,29 +1650,31 @@ def select_mode():
     
     while True:
         try:
-            choice = input("選択してください (1-7): ").strip()
+            choice = input("選択してください (1-8): ").strip()
             
             if choice == "1":
                 return "fixed_single"
             elif choice == "2":
                 return "camera_single"
             elif choice == "3":
-                return "fixed_loop"
+                return "target_single"
             elif choice == "4":
-                return "camera_loop"
+                return "fixed_loop"
             elif choice == "5":
-                return "calibrate"
+                return "camera_loop"
             elif choice == "6":
+                return "calibrate"
+            elif choice == "7":
                 toggle_debug_mode()
                 display_menu()  # メニューを再表示
                 continue
-            elif choice == "7":
+            elif choice == "8":
                 analyze_orange_durations()
                 input("\n何かキーを押すとメニューに戻ります...")
                 display_menu()  # メニューを再表示
                 continue
             else:
-                print("無効な選択です。1-7の数字を入力してください。")
+                print("無効な選択です。1-8の数字を入力してください。")
         except KeyboardInterrupt:
             print("\n終了します")
             return None
@@ -1692,6 +1779,8 @@ def main():
         run_fixed_file_mode()
     elif mode == "camera_single":
         run_camera_mode()
+    elif mode == "target_single":
+        run_target_file_mode()
     elif mode == "fixed_loop":
         interval = 1/60 if debug_mode else 1  # デバッグモード: 1秒, 通常: 1分
         run_loop_mode("fixed", interval)

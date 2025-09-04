@@ -90,3 +90,11 @@ timestamp,event_type,detection_result,orange_percentage,green_percentage,duratio
 2025-09-04 16:17:51,orange_continue,オレンジ,100.0,0.0,3.1,debug,1.png
 2025-09-04 16:17:52,orange_end,緑,0.0,100.0,4.1,debug,3.png
 2025-09-04 16:17:53,green_detection,緑,0.0,100.0,0.0,debug,3.png
+2025-09-05 07:53:36,green_detection,緑,0.0,100.0,0.0,normal,3.png
+2025-09-05 07:53:58,green_detection,緑,0.0,100.0,0.0,normal,3.png
+2025-09-05 07:54:04,green_detection,緑,0.0,100.0,0.0,normal,2.png
+2025-09-05 07:54:21,orange_start,オレンジ,100.0,0.0,0.0,normal,4.png
+2025-09-05 07:56:31,orange_start,オレンジ,94.1,0.0,0.0,normal,target.png
+2025-09-05 08:20:27,unknown_detection,不明,0.0,0.0,0.0,normal,target.png
+2025-09-05 08:20:50,orange_start,オレンジ,100.0,0.0,0.0,normal,target.png
+2025-09-05 08:21:20,green_detection,緑,0.0,100.0,0.0,normal,target.png
