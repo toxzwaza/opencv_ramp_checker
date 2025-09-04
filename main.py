@@ -65,16 +65,41 @@ def get_random_image_path():
     print(f"[RANDOM] ランダム選択画像: {image_name} ({len(available_images)}/4個利用可能)")
     return selected_image
 
+def find_available_camera():
+    """利用可能なカメラデバイスを検索"""
+    print("[CAMERA] 利用可能なカメラを検索中...")
+    
+    for camera_index in range(5):  # 0-4番まで検索
+        cap = cv2.VideoCapture(camera_index)
+        if cap.isOpened():
+            ret, frame = cap.read()
+            cap.release()
+            if ret:
+                print(f"[FOUND] カメラデバイス {camera_index} が利用可能です")
+                return camera_index
+    
+    print("[ERROR] 利用可能なカメラデバイスが見つかりません")
+    return None
+
 def capture_from_camera():
     """カメラから画像をキャプチャして保存"""
     print("[CAMERA] カメラから画像をキャプチャ中...")
     
-    # カメラを初期化 (通常は0番がデフォルトカメラ)
-    cap = cv2.VideoCapture(0)  # 元の設定に合わせて1番を使用
+    # 利用可能なカメラを検索
+    camera_index = find_available_camera()
+    if camera_index is None:
+        print("[ERROR] カメラにアクセスできません")
+        print("USBカメラが接続されているか確認してください")
+        print("利用可能なカメラデバイス:")
+        print("  - /dev/video0 (通常の内蔵カメラ)")
+        print("  - /dev/video1 (USB外部カメラ)")
+        return None
+    
+    # カメラを初期化
+    cap = cv2.VideoCapture(camera_index)
     
     if not cap.isOpened():
-        print("❌ カメラにアクセスできません")
-        print("USBカメラが接続されているか確認してください")
+        print(f"[ERROR] カメラデバイス {camera_index} を開けませんでした")
         return None
     
     try:
@@ -82,7 +107,7 @@ def capture_from_camera():
         ret, frame = cap.read()
         
         if not ret:
-            print("❌ フレームを取得できませんでした")
+            print("[ERROR] フレームを取得できませんでした")
             return None
         
         # タイムスタンプ付きのファイル名で保存
