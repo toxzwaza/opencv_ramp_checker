@@ -1,0 +1,105 @@
+{
+  "camera": {
+    "camera_index": 0,
+    "search_range": 5,
+    "capture_width": 640,
+    "capture_height": 480
+  },
+  "detection": {
+    "detection_interval_seconds": 60,
+    "debug_detection_interval_seconds": 1,
+    "notification_threshold_minutes": 10,
+    "debug_notification_threshold_seconds": 10,
+    "color_detection_threshold_percentage": 30.0,
+    "brightness_threshold": 100.0,
+    "brightness_threshold_high": 80.0
+  },
+  "coordinates": {
+    "orange": {
+      "x1": 297,
+      "y1": 86,
+      "x2": 347,
+      "y2": 133
+    },
+    "green": {
+      "x1": 303,
+      "y1": 110,
+      "x2": 350,
+      "y2": 164
+    }
+  },
+  "color_ranges": {
+    "default": {
+      "orange": {
+        "h_min": 11,
+        "s_min": 50,
+        "v_min": 50,
+        "h_max": 25,
+        "s_max": 255,
+        "v_max": 255
+      },
+      "green": {
+        "h_min": 40,
+        "s_min": 50,
+        "v_min": 50,
+        "h_max": 80,
+        "s_max": 255,
+        "v_max": 255
+      }
+    },
+    "enhanced": {
+      "orange": {
+        "h_min": 8,
+        "s_min": 30,
+        "v_min": 30,
+        "h_max": 30,
+        "s_max": 255,
+        "v_max": 255
+      },
+      "green": {
+        "h_min": 35,
+        "s_min": 30,
+        "v_min": 30,
+        "h_max": 85,
+        "s_max": 255,
+        "v_max": 255
+      }
+    }
+  },
+  "image_processing": {
+    "gaussian_blur_kernel": 3,
+    "saturation_enhancement_factor": 1.2,
+    "apply_preprocessing": true
+  },
+  "files": {
+    "csv_log_file": "data.csv",
+    "temp_file_prefix": "temp_frame_",
+    "camera_capture_prefix": "camera_capture_",
+    "excluded_files": ["orange.png", "green.png", "cut.png"],
+    "random_image_count": 4,
+    "random_image_prefix": ""
+  },
+  "display": {
+    "window_title": "Live Camera Feed - LAMP DETECTION",
+    "fullscreen": true,
+    "font_scale_default": 0.35,
+    "font_scale_title": 0.5,
+    "font_scale_logs": 0.3,
+    "font_thickness": 1,
+    "line_height": 20,
+    "y_offset_start": 25,
+    "max_detection_logs": 10,
+    "recent_logs_display": 5
+  },
+  "notification": {
+    "teams_webhook_url": "https://1966akioka.webhook.office.com/webhookb2/24ce70d8-1691-4b5e-aa90-67e8f56b36de@2f4ef158-134f-4faa-8db9-ef94be3b003a/IncomingWebhook/06ec01534f77477f9679950d30ee326e/2300d87e-df72-43f2-9367-9269f638e309/V2IJW5BzNLuCXyS-1pxN-7C7Kz4wq_zOJuSow6OIc6hWU1",
+    "mention_emails": ["to-murakami@akioka-ltd.jp", "hide-inoue@akioka-ltd.jp"],
+    "notification_title": "検査場からの通知",
+    "notification_message": "オレンジランプが10分間連続で点灯しています！"
+  },
+  "system": {
+    "debug_mode": false,
+    "color_range_mode": "enhanced",
+    "csv_encoding": "utf-8"
+  }
+}

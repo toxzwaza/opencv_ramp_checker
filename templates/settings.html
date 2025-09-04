@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>設定編集 - ランプ検知システム</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        
+        .settings-form {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .section {
+            margin-bottom: 40px;
+            padding: 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+        }
+        
+        .section h3 {
+            color: #4a5568;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 15px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+        
+        .form-label {
+            font-weight: 600;
+            color: #4a5568;
+        }
+        
+        .form-input {
+            padding: 10px 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #4299e1;
+            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+        }
+        
+        .form-checkbox {
+            transform: scale(1.5);
+        }
+        
+        .coordinate-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+        
+        .coordinate-input {
+            text-align: center;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+        
+        .btn-primary {
+            background: #4299e1;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #3182ce;
+            transform: translateY(-2px);
+        }
+        
+        .btn-success {
+            background: #48bb78;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #38a169;
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background: #718096;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #4a5568;
+            transform: translateY(-2px);
+        }
+        
+        .action-buttons {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 30px;
+            border-top: 2px solid #e2e8f0;
+        }
+        
+        .error-message {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 5px solid #f56565;
+        }
+        
+        .success-message {
+            background: #c6f6d5;
+            color: #276749;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 5px solid #48bb78;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- ヘッダー -->
+        <div class="header">
+            <h1>⚙️ 設定編集</h1>
+            <p>ランプ検知システムの各種設定を変更できます</p>
+        </div>
+        
+        <!-- 設定フォーム -->
+        <form id="settingsForm" class="settings-form">
+            <!-- カメラ設定 -->
+            <div class="section">
+                <h3>📷 カメラ設定</h3>
+                
+                <div class="form-row">
+                    <label class="form-label">カメラ検索範囲:</label>
+                    <input type="number" class="form-input" name="camera.search_range" 
+                           value="{{ settings.camera.search_range }}" min="1" max="10">
+                </div>
+                
+                <div class="form-row">
+                    <label class="form-label">キャプチャ幅:</label>
+                    <input type="number" class="form-input" name="camera.capture_width" 
+                           value="{{ settings.camera.capture_width }}" min="320" max="1920">
+                </div>
+                
+                <div class="form-row">
+                    <label class="form-label">キャプチャ高さ:</label>
+                    <input type="number" class="form-input" name="camera.capture_height" 
+                           value="{{ settings.camera.capture_height }}" min="240" max="1080">
+                </div>
+            </div>
+            
+            <!-- 検知設定 -->
+            <div class="section">
+                <h3>🔍 検知設定</h3>
+                
+                <div class="form-row">
+                    <label class="form-label">検知間隔（秒）:</label>
+                    <input type="number" class="form-input" name="detection.detection_interval_seconds" 
+                           value="{{ settings.detection.detection_interval_seconds }}" min="1" max="3600">
+                </div>
+                
+                <div class="form-row">
+                    <label class="form-label">デバッグ検知間隔（秒）:</label>
+                    <input type="number" class="form-input" name="detection.debug_detection_interval_seconds" 
+                           value="{{ settings.detection.debug_detection_interval_seconds }}" min="1" max="60">
+                </div>
+                
+                <div class="form-row">
+                    <label class="form-label">通知閾値（分）:</label>
+                    <input type="number" class="form-input" name="detection.notification_threshold_minutes" 
+                           value="{{ settings.detection.notification_threshold_minutes }}" min="1" max="120">
+                </div>
+                
+                <div class="form-row">
+                    <label class="form-label">デバッグ通知閾値（秒）:</label>
+                    <input type="number" class="form-input" name="detection.debug_notification_threshold_seconds" 
+                           value="{{ settings.detection.debug_notification_threshold_seconds }}" min="1" max="300">
+                </div>
+                
+                <div class="form-row">
+                    <label class="form-label">色検出閾値（%）:</label>
+                    <input type="number" class="form-input" name="detection.color_detection_threshold_percentage" 
+                           value="{{ settings.detection.color_detection_threshold_percentage }}" min="0" max="100" step="0.1">
+                </div>
+            </div>
+            
+            <!-- 座標設定 -->
+            <div class="section">
+                <h3>📍 座標設定</h3>
+                
+                <h4 style="color: #ed8936; margin-bottom: 15px;">🟠 オレンジランプ座標</h4>
+                <div class="coordinate-grid">
+                    <div>
+                        <label class="form-label">X1:</label>
+                        <input type="number" class="form-input coordinate-input" name="coordinates.orange.x1" 
+                               value="{{ settings.coordinates.orange.x1 }}" min="0">
+                    </div>
+                    <div>
+                        <label class="form-label">Y1:</label>
+                        <input type="number" class="form-input coordinate-input" name="coordinates.orange.y1" 
+                               value="{{ settings.coordinates.orange.y1 }}" min="0">
+                    </div>
+                    <div>
+                        <label class="form-label">X2:</label>
+                        <input type="number" class="form-input coordinate-input" name="coordinates.orange.x2" 
+                               value="{{ settings.coordinates.orange.x2 }}" min="0">
+                    </div>
+                    <div>
+                        <label class="form-label">Y2:</label>
+                        <input type="number" class="form-input coordinate-input" name="coordinates.orange.y2" 
+                               value="{{ settings.coordinates.orange.y2 }}" min="0">
+                    </div>
+                </div>
+                
+                <h4 style="color: #48bb78; margin: 20px 0 15px 0;">🟢 緑ランプ座標</h4>
+                <div class="coordinate-grid">
+                    <div>
+                        <label class="form-label">X1:</label>
+                        <input type="number" class="form-input coordinate-input" name="coordinates.green.x1" 
+                               value="{{ settings.coordinates.green.x1 }}" min="0">
+                    </div>
+                    <div>
+                        <label class="form-label">Y1:</label>
+                        <input type="number" class="form-input coordinate-input" name="coordinates.green.y1" 
+                               value="{{ settings.coordinates.green.y1 }}" min="0">
+                    </div>
+                    <div>
+                        <label class="form-label">X2:</label>
+                        <input type="number" class="form-input coordinate-input" name="coordinates.green.x2" 
+                               value="{{ settings.coordinates.green.x2 }}" min="0">
+                    </div>
+                    <div>
+                        <label class="form-label">Y2:</label>
+                        <input type="number" class="form-input coordinate-input" name="coordinates.green.y2" 
+                               value="{{ settings.coordinates.green.y2 }}" min="0">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 表示設定 -->
+            <div class="section">
+                <h3>🖥️ 表示設定</h3>
+                
+                <div class="form-row">
+                    <label class="form-label">全画面表示:</label>
+                    <input type="checkbox" class="form-checkbox" name="display.fullscreen" 
+                           {% if settings.display.fullscreen %}checked{% endif %}>
+                </div>
+                
+                <div class="form-row">
+                    <label class="form-label">デフォルトフォントサイズ:</label>
+                    <input type="number" class="form-input" name="display.font_scale_default" 
+                           value="{{ settings.display.font_scale_default }}" min="0.1" max="2.0" step="0.05">
+                </div>
+                
+                <div class="form-row">
+                    <label class="form-label">タイトルフォントサイズ:</label>
+                    <input type="number" class="form-input" name="display.font_scale_title" 
+                           value="{{ settings.display.font_scale_title }}" min="0.1" max="2.0" step="0.05">
+                </div>
+                
+                <div class="form-row">
+                    <label class="form-label">ログフォントサイズ:</label>
+                    <input type="number" class="form-input" name="display.font_scale_logs" 
+                           value="{{ settings.display.font_scale_logs }}" min="0.1" max="1.0" step="0.05">
+                </div>
+                
+                <div class="form-row">
+                    <label class="form-label">履歴表示件数:</label>
+                    <input type="number" class="form-input" name="display.recent_logs_display" 
+                           value="{{ settings.display.recent_logs_display }}" min="1" max="20">
+                </div>
+            </div>
+            
+            <!-- 通知設定 -->
+            <div class="section">
+                <h3>📢 通知設定</h3>
+                
+                <div class="form-row">
+                    <label class="form-label">Teams Webhook URL:</label>
+                    <input type="url" class="form-input" name="notification.teams_webhook_url" 
+                           value="{{ settings.notification.teams_webhook_url }}">
+                </div>
+                
+                <div class="form-row">
+                    <label class="form-label">通知先メール（カンマ区切り）:</label>
+                    <input type="text" class="form-input" name="notification.mention_emails" 
+                           value="{{ settings.notification.mention_emails | join(', ') }}">
+                </div>
+                
+                <div class="form-row">
+                    <label class="form-label">通知タイトル:</label>
+                    <input type="text" class="form-input" name="notification.notification_title" 
+                           value="{{ settings.notification.notification_title }}">
+                </div>
+                
+                <div class="form-row">
+                    <label class="form-label">通知メッセージ:</label>
+                    <input type="text" class="form-input" name="notification.notification_message" 
+                           value="{{ settings.notification.notification_message }}">
+                </div>
+            </div>
+            
+            <!-- 操作ボタン -->
+            <div class="action-buttons">
+                <button type="button" class="btn btn-success" onclick="saveSettings()">💾 設定を保存</button>
+                <button type="button" class="btn btn-secondary" onclick="resetForm()">🔄 リセット</button>
+                <a href="/" class="btn btn-primary">🏠 メインページに戻る</a>
+            </div>
+        </form>
+    </div>
+    
+    <!-- 再起動確認ダイアログ -->
+    <div id="restartDialog" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 1000;">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 15px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); text-align: center; max-width: 500px;">
+            <h3 style="color: #4a5568; margin-bottom: 20px;">🔄 カメラ監視システムの再起動</h3>
+            <p style="color: #718096; margin-bottom: 30px; line-height: 1.6;">
+                設定変更を反映するために、カメラ監視システムを再起動しますか？<br>
+                <strong>注意:</strong> 現在の監視状態はリセットされます。
+            </p>
+            <div>
+                <button class="btn btn-success" onclick="executeRestart()">✅ 再起動する</button>
+                <button class="btn btn-secondary" onclick="hideRestartDialog()">❌ キャンセル</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function saveSettings() {
+            const form = document.getElementById('settingsForm');
+            const formData = new FormData(form);
+            
+            // フォームデータをJSONに変換
+            const settings = {};
+            
+            // 基本的な値の処理
+            for (let [key, value] of formData.entries()) {
+                const keys = key.split('.');
+                let current = settings;
+                
+                // ネストしたオブジェクトを作成
+                for (let i = 0; i < keys.length - 1; i++) {
+                    if (!current[keys[i]]) {
+                        current[keys[i]] = {};
+                    }
+                    current = current[keys[i]];
+                }
+                
+                // 値の型変換
+                const lastKey = keys[keys.length - 1];
+                if (key.includes('fullscreen')) {
+                    current[lastKey] = true; // チェックボックスがチェックされている場合
+                } else if (value.includes(',')) {
+                    // カンマ区切りの場合は配列に変換
+                    current[lastKey] = value.split(',').map(s => s.trim());
+                } else if (!isNaN(value) && value !== '') {
+                    // 数値の場合
+                    current[lastKey] = parseFloat(value);
+                } else {
+                    current[lastKey] = value;
+                }
+            }
+            
+            // チェックボックスの未チェック状態を処理
+            if (!formData.has('display.fullscreen')) {
+                if (!settings.display) settings.display = {};
+                settings.display.fullscreen = false;
+            }
+            
+            // 元の設定を読み込んで、編集されていない部分を保持
+            fetch('/api/settings')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const mergedSettings = { ...data.data, ...settings };
+                        
+                        // 設定を保存
+                        fetch('/api/settings', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(mergedSettings)
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                alert('✅ 設定を保存しました');
+                                showRestartDialog();
+                            } else {
+                                alert('❌ エラー: ' + (data.errors ? data.errors.join(', ') : data.error));
+                            }
+                        })
+                        .catch(error => {
+                            alert('❌ 通信エラー: ' + error);
+                        });
+                    }
+                })
+                .catch(error => {
+                    alert('❌ 設定の読み込みエラー: ' + error);
+                });
+        }
+        
+        function resetForm() {
+            if (confirm('設定をリセットしますか？')) {
+                location.reload();
+            }
+        }
+        
+        function showRestartDialog() {
+            document.getElementById('restartDialog').style.display = 'block';
+        }
+        
+        function hideRestartDialog() {
+            document.getElementById('restartDialog').style.display = 'none';
+        }
+        
+        function executeRestart() {
+            hideRestartDialog();
+            
+            fetch('/api/main/restart', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('✅ カメラ監視システムを再起動しました');
+                        setTimeout(() => {
+                            window.location.href = '/';
+                        }, 2000);
+                    } else {
+                        alert('❌ エラー: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    alert('❌ 通信エラー: ' + error);
+                });
+        }
+    </script>
+</body>
+</html>

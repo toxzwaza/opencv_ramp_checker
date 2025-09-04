@@ -22,6 +22,83 @@ orange_detection_start_time = None  # オレンジ検知開始時刻
 notification_sent = False  # 通知済みフラグ
 debug_mode = False  # デバッグモード（分→秒変換）
 
+# 設定ファイルのグローバル変数
+settings = None
+
+# ========================================
+# 設定ファイル管理機能
+# ========================================
+
+def load_settings():
+    """setting.jsonから設定を読み込む"""
+    global settings
+    
+    settings_file = "setting.json"
+    
+    try:
+        if os.path.exists(settings_file):
+            with open(settings_file, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+            print(f"[SETTINGS] 設定ファイルを読み込みました: {settings_file}")
+        else:
+            print(f"[ERROR] 設定ファイルが見つかりません: {settings_file}")
+            return False
+    except Exception as e:
+        print(f"[ERROR] 設定ファイルの読み込みに失敗しました: {e}")
+        return False
+    
+    return True
+
+def save_settings():
+    """現在の設定をsetting.jsonに保存"""
+    global settings
+    
+    settings_file = "setting.json"
+    
+    try:
+        with open(settings_file, 'w', encoding='utf-8') as f:
+            json.dump(settings, f, indent=2, ensure_ascii=False)
+        print(f"[SETTINGS] 設定ファイルを保存しました: {settings_file}")
+        return True
+    except Exception as e:
+        print(f"[ERROR] 設定ファイルの保存に失敗しました: {e}")
+        return False
+
+def get_setting(key_path, default_value=None):
+    """設定値を取得（ドット記法対応）"""
+    global settings
+    
+    if settings is None:
+        return default_value
+    
+    try:
+        keys = key_path.split('.')
+        value = settings
+        for key in keys:
+            value = value[key]
+        return value
+    except (KeyError, TypeError):
+        print(f"[WARNING] 設定キー '{key_path}' が見つかりません。デフォルト値を使用: {default_value}")
+        return default_value
+
+def update_setting(key_path, new_value):
+    """設定値を更新"""
+    global settings
+    
+    if settings is None:
+        return False
+    
+    try:
+        keys = key_path.split('.')
+        current = settings
+        for key in keys[:-1]:
+            current = current[key]
+        current[keys[-1]] = new_value
+        return True
+    except (KeyError, TypeError):
+        print(f"[ERROR] 設定キー '{key_path}' の更新に失敗しました")
+        return False
+
 # ========================================
 # 2.py からの関数（画像切り出し機能）
 # ========================================
@@ -36,7 +113,7 @@ def get_image_files():
         image_files.extend(glob.glob(os.path.join('sample_img', ext.upper())))
     
     # 切り出し済みファイルを除外
-    excluded_files = ['orange.png', 'green.png', 'cut.png']
+    excluded_files = get_setting('files.excluded_files', ['orange.png', 'green.png', 'cut.png'])
     filtered_files = []
     
     for file in image_files:
@@ -50,28 +127,36 @@ def get_random_image_path():
     """1.pngから4.pngまでをランダムで選択"""
     available_images = []
     
-    # 1.pngから4.pngまでの存在確認
-    for i in range(1, 5):
-        image_path = os.path.join("sample_img", f"{i}.png")
+    # 設定から画像数とプレフィックスを取得
+    image_count = get_setting('files.random_image_count', 4)
+    prefix = get_setting('files.random_image_prefix', '')
+    
+    # 1.pngからN.pngまでの存在確認
+    for i in range(1, image_count + 1):
+        filename = f"{prefix}{i}.png" if prefix else f"{i}.png"
+        image_path = os.path.join("sample_img", filename)
         if os.path.exists(image_path):
             available_images.append(image_path)
     
     if not available_images:
-        print("❌ sample_imgフォルダに1.png～4.pngが見つかりません")
+        print(f"[ERROR] sample_imgフォルダに1.png～{image_count}.pngが見つかりません")
         return None
     
     # ランダムに選択
     selected_image = random.choice(available_images)
     image_name = os.path.basename(selected_image)
     
-    print(f"[RANDOM] ランダム選択画像: {image_name} ({len(available_images)}/4個利用可能)")
+    print(f"[RANDOM] ランダム選択画像: {image_name} ({len(available_images)}/{image_count}個利用可能)")
     return selected_image
 
 def find_available_camera():
     """利用可能なカメラデバイスを検索"""
     print("[CAMERA] 利用可能なカメラを検索中...")
     
-    for camera_index in range(5):  # 0-4番まで検索
+    # 設定から検索範囲を取得
+    search_range = get_setting('camera.search_range', 5)
+    
+    for camera_index in range(search_range):
         cap = cv2.VideoCapture(camera_index)
         if cap.isOpened():
             ret, frame = cap.read()
@@ -130,8 +215,12 @@ def capture_from_camera():
         cap.release()
         print("カメラを正常に閉じました")
 
-def draw_text_with_background(image, text, position, font_scale=0.35, color=(255, 255, 255), bg_color=(0, 0, 0), thickness=1):
+def draw_text_with_background(image, text, position, font_scale=None, color=(255, 255, 255), bg_color=(0, 0, 0), thickness=None):
     """背景付きでテキストを描画"""
+    if font_scale is None:
+        font_scale = get_setting('display.font_scale_default', 0.35)
+    if thickness is None:
+        thickness = get_setting('display.font_thickness', 1)
     font = cv2.FONT_HERSHEY_SIMPLEX
     
     # テキストサイズを取得
@@ -150,12 +239,13 @@ def create_status_overlay(frame, detection_logs, current_time):
     global current_state, orange_detection_start_time, notification_sent, debug_mode
     
     overlay_frame = frame.copy()
-    y_offset = 25
-    line_height = 20
+    y_offset = get_setting('display.y_offset_start', 25)
+    line_height = get_setting('display.line_height', 20)
     
     # タイトル
+    title_font_scale = get_setting('display.font_scale_title', 0.5)
     draw_text_with_background(overlay_frame, "LAMP DETECTION SYSTEM", (20, y_offset), 
-                             font_scale=0.5, color=(255, 255, 255), bg_color=(0, 100, 200))
+                             font_scale=title_font_scale, color=(255, 255, 255), bg_color=(0, 100, 200))
     y_offset += line_height + 5
     
     # 現在時刻
@@ -213,17 +303,20 @@ def create_status_overlay(frame, detection_logs, current_time):
                              color=(255, 255, 255), bg_color=(50, 50, 50))
     y_offset += line_height + 5
     
-    # 検知ログの表示（最新5件）
+    # 検知ログの表示
     if detection_logs:
+        logs_font_scale = get_setting('display.font_scale_logs', 0.3)
+        recent_logs_count = get_setting('display.recent_logs_display', 5)
+        
         draw_text_with_background(overlay_frame, "RECENT DETECTIONS:", (20, y_offset), 
-                                 font_scale=0.4, color=(255, 255, 255), bg_color=(100, 100, 0))
+                                 font_scale=logs_font_scale + 0.1, color=(255, 255, 255), bg_color=(100, 100, 0))
         y_offset += line_height
         
-        recent_logs = detection_logs[-5:]  # 最新5件
+        recent_logs = detection_logs[-recent_logs_count:]  # 設定に応じた件数
         for log in recent_logs:
             log_color = (0, 165, 255) if "ORANGE" in log else (0, 255, 0)
             draw_text_with_background(overlay_frame, log, (30, y_offset), 
-                                     font_scale=0.3, color=log_color, bg_color=(30, 30, 30))
+                                     font_scale=logs_font_scale, color=log_color, bg_color=(30, 30, 30))
             y_offset += 15
     
     # 操作説明
@@ -261,7 +354,10 @@ def run_camera_with_live_display():
     initialize_csv_log()
     
     # 検知間隔の設定
-    detection_interval = 1 if debug_mode else 60  # デバッグ: 1秒, 通常: 60秒
+    if debug_mode:
+        detection_interval = get_setting('detection.debug_detection_interval_seconds', 1)
+    else:
+        detection_interval = get_setting('detection.detection_interval_seconds', 60)
     last_detection_time = 0
     
     time_unit = get_time_unit()
@@ -278,10 +374,13 @@ def run_camera_with_live_display():
     # 検知ログを保持
     detection_logs = []
     
-    # 全画面表示用のウィンドウを作成
-    window_name = 'Live Camera Feed - LAMP DETECTION'
+    # ウィンドウを作成
+    window_name = get_setting('display.window_title', 'Live Camera Feed - LAMP DETECTION')
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    
+    # 全画面表示の設定
+    if get_setting('display.fullscreen', True):
+        cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
     
     try:
         while True:
@@ -369,9 +468,12 @@ def run_camera_with_live_display():
 
 def get_color_coordinates():
     """各色の座標範囲を定義"""
+    orange_coords = get_setting('coordinates.orange', {'x1': 297, 'y1': 86, 'x2': 347, 'y2': 133})
+    green_coords = get_setting('coordinates.green', {'x1': 303, 'y1': 110, 'x2': 350, 'y2': 164})
+    
     color_coordinates = {
-        'orange': (297, 86, 347, 133),  # (x1, y1, x2, y2)
-        'green': (303, 110, 350, 164),  # greenの座標範囲
+        'orange': (orange_coords['x1'], orange_coords['y1'], orange_coords['x2'], orange_coords['y2']),
+        'green': (green_coords['x1'], green_coords['y1'], green_coords['x2'], green_coords['y2']),
     }
     return color_coordinates
 
@@ -770,7 +872,11 @@ def get_time_unit():
 def get_notification_threshold():
     """デバッグモードに応じて通知閾値を取得（秒単位）"""
     global debug_mode
-    return 10 if debug_mode else (10 * 60)  # デバッグ: 10秒, 通常: 10分
+    if debug_mode:
+        return get_setting('detection.debug_notification_threshold_seconds', 10)
+    else:
+        threshold_minutes = get_setting('detection.notification_threshold_minutes', 10)
+        return threshold_minutes * 60
 
 def get_time_delta(minutes=10):
     """デバッグモードに応じてtimedeltaを取得"""
@@ -1491,6 +1597,11 @@ def notify_teams(mention_ids, title, message, url=None):
         
 def main():
     """メイン関数"""
+    # 設定ファイルを読み込み
+    if not load_settings():
+        print("[ERROR] 設定ファイルの読み込みに失敗しました。プログラムを終了します。")
+        return
+    
     mode = select_mode()
     if mode is None:
         return
