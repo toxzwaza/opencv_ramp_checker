@@ -350,31 +350,44 @@ def get_latest_image():
 def capture_image():
     """カメラから画像をキャプチャ"""
     try:
-        # カメラから画像をキャプチャ（main.pyの機能を利用）
+        # sample_imgディレクトリが存在しない場合は作成
+        sample_img_dir = "sample_img"
+        if not os.path.exists(sample_img_dir):
+            os.makedirs(sample_img_dir)
+            print(f"[INFO] ディレクトリを作成しました: {sample_img_dir}")
+        
+        # カメラから画像をキャプチャ
+        print("[DEBUG] カメラキャプチャ開始")
         camera_index = find_available_camera()
         if camera_index is None:
-            return jsonify({'success': False, 'message': 'カメラが利用できません'})
+            print("[ERROR] カメラが見つかりません")
+            return jsonify({'success': False, 'message': 'カメラが利用できません。カメラが接続されているか確認してください。'})
         
+        print(f"[DEBUG] カメラデバイス {camera_index} を開いています...")
         cap = cv2.VideoCapture(camera_index)
         if not cap.isOpened():
-            return jsonify({'success': False, 'message': 'カメラを開けませんでした'})
+            print(f"[ERROR] カメラデバイス {camera_index} を開けませんでした")
+            return jsonify({'success': False, 'message': f'カメラデバイス {camera_index} を開けませんでした'})
         
         try:
+            print("[DEBUG] フレームを取得中...")
             ret, frame = cap.read()
             if not ret:
+                print("[ERROR] フレームを取得できませんでした")
                 return jsonify({'success': False, 'message': 'フレームを取得できませんでした'})
             
             # タイムスタンプ付きのファイル名で保存
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             capture_filename = f"manual_capture_{timestamp}.png"
-            capture_path = os.path.join("sample_img", capture_filename)
+            capture_path = os.path.join(sample_img_dir, capture_filename)
             
             if cv2.imwrite(capture_path, frame):
+                print(f"[SUCCESS] 画像をキャプチャしました: {capture_path}")
                 return jsonify({
                     'success': True, 
                     'message': f'画像をキャプチャしました: {capture_filename}',
                     'filename': capture_filename,
-                    'path': capture_path
+                    'image_path': capture_path
                 })
             else:
                 return jsonify({'success': False, 'message': '画像の保存に失敗しました'})
@@ -383,7 +396,28 @@ def capture_image():
             cap.release()
             
     except Exception as e:
+        print(f"[ERROR] 画像キャプチャエラー: {e}")
         return jsonify({'success': False, 'message': f'キャプチャエラー: {str(e)}'})
+
+@app.route('/api/image/<filename>')
+def serve_captured_image(filename):
+    """キャプチャした画像を配信"""
+    try:
+        # sample_imgディレクトリから画像を配信
+        sample_img_dir = "sample_img"
+        image_path = os.path.join(sample_img_dir, filename)
+        
+        if os.path.exists(image_path):
+            with open(image_path, 'rb') as f:
+                image_data = f.read()
+            return Response(image_data, mimetype='image/png')
+        else:
+            print(f"[ERROR] 画像ファイルが見つかりません: {image_path}")
+            return jsonify({'error': 'Image not found'}), 404
+            
+    except Exception as e:
+        print(f"[ERROR] 画像配信エラー: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/settings')
 def settings_page():

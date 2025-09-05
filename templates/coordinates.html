@@ -358,7 +358,8 @@ class CoordinateManager {
             
             if (result.success) {
                 // キャプチャした画像を読み込み
-                this.loadImage(`/api/image/${result.image_path.split('/').pop()}`);
+                console.log('キャプチャ結果:', result);
+                this.loadImage(`/api/image/${result.filename}`);
                 showAlert(result.message, 'success');
             } else {
                 showAlert(result.message, 'danger');
