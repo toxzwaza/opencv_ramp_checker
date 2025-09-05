@@ -17,17 +17,17 @@
     "color_detection_mode": "strict"
   },
   "coordinates": {
+    "green": {
+      "x1": 184,
+      "y1": 131,
+      "x2": 232,
+      "y2": 181
+    },
     "orange": {
       "x1": 317,
       "y1": 97,
-      "x2": 362,
-      "y2": 145
-    },
-    "green": {
-      "x1": 315,
-      "y1": 130,
-      "x2": 363,
-      "y2": 180
+      "x2": 562,
+      "y2": 330
     }
   },
   "color_ranges": {

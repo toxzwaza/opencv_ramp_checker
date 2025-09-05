@@ -194,3 +194,5 @@ timestamp,event_type,detection_result,orange_percentage,green_percentage,duratio
 2025-09-05 15:16:37,green_detection,緑,0.0,100.0,0.0,normal,temp_frame_20250905_151637.png
 2025-09-05 15:17:38,orange_start,オレンジ,100.0,0.0,0.0,normal,temp_frame_20250905_151737.png
 2025-09-05 15:18:38,orange_continue,オレンジ,100.0,0.0,60.0,normal,temp_frame_20250905_151837.png
+2025-09-05 16:28:09,unknown_detection,不明,0.0,0.0,0.0,normal,temp_frame_20250905_162809.png
+2025-09-05 16:28:41,unknown_detection,不明,0.0,0.0,0.0,normal,temp_frame_20250905_162841.png

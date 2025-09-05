@@ -320,13 +320,16 @@ class CoordinateManager {
     
     async loadSettings() {
         try {
-            const response = await fetch('/api/settings');
-            const settings = await response.json();
-            if (settings.coordinates) {
-                this.coordinates = settings.coordinates;
+            const response = await fetch('/api/coordinates');
+            const result = await response.json();
+            if (result.success && result.coordinates) {
+                this.coordinates = result.coordinates;
+                console.log('座標データを読み込みました:', this.coordinates);
+            } else {
+                console.warn('座標データの読み込みに失敗、デフォルト値を使用');
             }
         } catch (error) {
-            console.error('設定の読み込みに失敗:', error);
+            console.error('座標データの読み込みに失敗:', error);
         }
     }
     
@@ -622,6 +625,8 @@ class CoordinateManager {
     
     async saveCoordinates() {
         try {
+            console.log('座標を保存中:', this.coordinates);
+            
             const response = await fetch('/api/coordinates', {
                 method: 'POST',
                 headers: {
@@ -633,8 +638,12 @@ class CoordinateManager {
             const result = await response.json();
             if (result.success) {
                 showAlert(result.message, 'success');
+                // 保存後に座標表示を更新
+                this.updateCoordinateDisplay();
+                console.log('座標を正常に保存しました');
             } else {
-                showAlert(result.message, 'danger');
+                showAlert(result.message || '座標の保存に失敗しました', 'danger');
+                console.error('座標保存失敗:', result);
             }
         } catch (error) {
             console.error('座標保存エラー:', error);

@@ -408,6 +408,80 @@ def monitoring_page():
                          main_running=main_running,
                          current_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
+@app.route('/api/coordinates', methods=['GET'])
+def get_coordinates_api():
+    """現在の座標を取得するAPI"""
+    try:
+        settings = load_settings()
+        if settings and 'coordinates' in settings:
+            return jsonify({'success': True, 'coordinates': settings['coordinates']})
+        else:
+            # デフォルト座標を返す
+            default_coordinates = {
+                'orange': {'x1': 317, 'y1': 97, 'x2': 362, 'y2': 145},
+                'green': {'x1': 315, 'y1': 130, 'x2': 363, 'y2': 180}
+            }
+            return jsonify({'success': True, 'coordinates': default_coordinates})
+    except Exception as e:
+        print(f"[ERROR] 座標取得API エラー: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/coordinates', methods=['POST'])
+def save_coordinates_api():
+    """座標を保存するAPI"""
+    try:
+        coordinates = request.json
+        
+        # バリデーション
+        if not coordinates or not isinstance(coordinates, dict):
+            return jsonify({'success': False, 'message': '座標データが無効です'}), 400
+        
+        # 必要な座標データが含まれているかチェック
+        required_colors = ['orange', 'green']
+        required_keys = ['x1', 'y1', 'x2', 'y2']
+        
+        for color in required_colors:
+            if color not in coordinates:
+                return jsonify({'success': False, 'message': f'{color}の座標が見つかりません'}), 400
+            
+            coord_data = coordinates[color]
+            for key in required_keys:
+                if key not in coord_data:
+                    return jsonify({'success': False, 'message': f'{color}の{key}座標が見つかりません'}), 400
+                
+                # 数値かどうかチェック
+                if not isinstance(coord_data[key], (int, float)):
+                    return jsonify({'success': False, 'message': f'{color}の{key}座標が数値ではありません'}), 400
+        
+        # 現在の設定を読み込み
+        settings = load_settings()
+        if not settings:
+            # 設定ファイルが存在しない場合、デフォルト設定を作成
+            settings = {
+                "detection": {
+                    "detection_interval_seconds": 5,
+                    "notification_threshold_minutes": 5,
+                    "color_detection_threshold_percentage": 70
+                },
+                "camera": {
+                    "search_range": 5
+                },
+                "coordinates": {}
+            }
+        
+        # 座標を更新
+        settings['coordinates'] = coordinates
+        
+        # 設定を保存
+        if save_settings(settings):
+            return jsonify({'success': True, 'message': '座標を保存しました'})
+        else:
+            return jsonify({'success': False, 'message': '座標の保存に失敗しました'}), 500
+            
+    except Exception as e:
+        print(f"[ERROR] 座標保存API エラー: {e}")
+        return jsonify({'success': False, 'message': f'エラー: {str(e)}'}), 500
+
 @app.route('/api/coordinates/start', methods=['POST'])
 def start_coordinate_setter():
     """座標設定ツールを開始"""
