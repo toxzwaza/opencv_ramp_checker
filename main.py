@@ -15,11 +15,13 @@ import random
 from datetime import datetime, timedelta
 import requests
 import json
+from line_notify import notify_group
 
 # グローバル変数でフラグ管理
 current_state = None  # None: 緑またはなし, True: オレンジ
 orange_detection_start_time = None  # オレンジ検知開始時刻
-notification_sent = False  # 通知済みフラグ
+notification_sent = False  # 通知済みフラグ（廃止予定）
+notification_history = []  # 通知履歴（送信済みの経過時間を記録）
 debug_mode = False  # デバッグモード（分→秒変換）
 
 # 設定ファイルのグローバル変数
@@ -234,11 +236,87 @@ def draw_text_with_background(image, text, position, font_scale=None, color=(255
     # テキストを描画
     cv2.putText(image, text, position, font, font_scale, color, thickness)
 
-def create_status_overlay(frame, detection_logs, current_time):
+def draw_detection_boxes(frame, detection_results=None):
+    """検知した色の座標に枠を描画"""
+    if detection_results is None:
+        return frame
+    
+    # 色座標を取得
+    color_coordinates = get_color_coordinates()
+    
+    for result in detection_results:
+        color_name = result['expected_color']
+        percentage = result['percentage']
+        
+        # 日本語から英語への変換
+        color_key = 'orange' if color_name == 'オレンジ' else 'green'
+        
+        if color_key in color_coordinates:
+            x1, y1, x2, y2 = color_coordinates[color_key]
+            
+            # 検知閾値を取得
+            threshold = get_setting('detection.color_detection_threshold_percentage', 50.0)
+            
+            # 検知されている場合は枠を描画
+            if percentage >= threshold:
+                # 色に応じて枠の色を設定
+                if color_name == 'オレンジ':
+                    box_color = (0, 165, 255)  # オレンジ色 (BGR)
+                    text_color = (255, 255, 255)
+                elif color_name == '緑':
+                    box_color = (0, 255, 0)  # 緑色 (BGR)
+                    text_color = (255, 255, 255)
+                else:
+                    box_color = (128, 128, 128)  # グレー
+                    text_color = (255, 255, 255)
+                
+                # 枠の太さを検知強度に応じて調整
+                thickness = max(2, min(5, int(percentage / 20)))
+                
+                # 枠を描画
+                cv2.rectangle(frame, (x1, y1), (x2, y2), box_color, thickness)
+                
+                # ラベルテキストを準備（英語表記に変更）
+                color_name_en = "ORANGE" if color_name == "オレンジ" else "GREEN"
+                label_text = f"{color_name_en}: {percentage:.1f}%"
+                
+                # ラベルの背景を描画
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                font_scale = get_setting('display.detection_label_font_scale', 0.4)
+                label_thickness = get_setting('display.detection_label_thickness', 1)
+                
+                (label_width, label_height), baseline = cv2.getTextSize(
+                    label_text, font, font_scale, label_thickness
+                )
+                
+                # ラベル位置（枠の上部）
+                label_x = x1
+                label_y = max(y1 - 5, label_height + 5)
+                
+                # ラベル背景を描画
+                cv2.rectangle(frame, 
+                            (label_x - 2, label_y - label_height - 2), 
+                            (label_x + label_width + 2, label_y + baseline + 2), 
+                            box_color, -1)
+                
+                # ラベルテキストを描画
+                cv2.putText(frame, label_text, (label_x, label_y), 
+                           font, font_scale, text_color, label_thickness)
+                
+                # 検知範囲の中心に小さな円を描画
+                center_x = (x1 + x2) // 2
+                center_y = (y1 + y2) // 2
+                cv2.circle(frame, (center_x, center_y), 3, box_color, -1)
+    
+    return frame
+
+def create_status_overlay(frame, detection_logs, current_time, detection_results=None):
     """ステータス情報をオーバーレイで表示"""
     global current_state, orange_detection_start_time, notification_sent, debug_mode
     
-    overlay_frame = frame.copy()
+    # まず検知枠を描画
+    overlay_frame = draw_detection_boxes(frame.copy(), detection_results)
+    
     y_offset = get_setting('display.y_offset_start', 25)
     line_height = get_setting('display.line_height', 20)
     
@@ -314,7 +392,13 @@ def create_status_overlay(frame, detection_logs, current_time):
         
         recent_logs = detection_logs[-recent_logs_count:]  # 設定に応じた件数
         for log in recent_logs:
-            log_color = (0, 165, 255) if "ORANGE" in log else (0, 255, 0)
+            # 英語表記に対応した色判定
+            if "ORANGE" in log:
+                log_color = (0, 165, 255)  # オレンジ色
+            elif "GREEN" in log:
+                log_color = (0, 255, 0)    # 緑色
+            else:
+                log_color = (128, 128, 128)  # グレー（UNKNOWN等）
             draw_text_with_background(overlay_frame, log, (30, y_offset), 
                                      font_scale=logs_font_scale, color=log_color, bg_color=(30, 30, 30))
             y_offset += 15
@@ -389,6 +473,7 @@ def run_camera_with_live_display():
     current_state = None
     orange_detection_start_time = None
     notification_sent = False
+    reset_notification_history()  # 通知履歴もリセット
     
     # CSVログファイルを初期化
     initialize_csv_log()
@@ -413,6 +498,9 @@ def run_camera_with_live_display():
     
     # 検知ログを保持
     detection_logs = []
+    
+    # 検知結果を保持（枠描画用）
+    detection_results = None
     
     # ウィンドウを作成
     window_name = get_setting('display.window_title', 'Live Camera Feed - LAMP DETECTION')
@@ -453,6 +541,7 @@ def run_camera_with_live_display():
                             results = run_analysis_silent()  # 静音版の分析
                             if results and len(results) == 2:
                                 judgment, confidence, reasons, scores = comprehensive_judgment(results)
+                                detection_results = results  # 枠描画用に結果を保存
                             
                                 # 検知結果から割合を取得
                                 orange_percentage = 0
@@ -466,8 +555,9 @@ def run_camera_with_live_display():
                                 # フラグ状態を更新
                                 detection_state = update_detection_state(judgment, orange_percentage, green_percentage, os.path.basename(temp_path))
                                 
-                                # ログに記録
-                                log_entry = f"{current_datetime.strftime('%H:%M:%S')} - {judgment} (O:{orange_percentage:.1f}% G:{green_percentage:.1f}%)"
+                                # ログに記録（英語表記に変更）
+                                judgment_en = "ORANGE" if judgment == "オレンジ" else "GREEN" if judgment == "緑" else "UNKNOWN"
+                                log_entry = f"{current_datetime.strftime('%H:%M:%S')} - {judgment_en} (O:{orange_percentage:.1f}% G:{green_percentage:.1f}%)"
                                 detection_logs.append(log_entry)
                                 
                                 # ログが多すぎる場合は古いものを削除
@@ -492,7 +582,7 @@ def run_camera_with_live_display():
             
             # ステータス情報をオーバーレイして表示
             try:
-                display_frame = create_status_overlay(frame, detection_logs, current_time_unix)
+                display_frame = create_status_overlay(frame, detection_logs, current_time_unix, detection_results)
                 
                 # 毎フレームWeb表示用に保存（軽量化のため5フレームに1回）
                 if hasattr(run_camera_with_live_display, 'frame_counter'):
@@ -1043,9 +1133,30 @@ def format_time_remaining(remaining_seconds):
         remaining_sec = int(remaining_seconds % 60)
         return f"{int(remaining_minutes):02d}:{remaining_sec:02d}"
 
-def send_notification(message):
-    """通知を送信する関数（現在はコンソール出力）"""
+def send_notification(elapsed_seconds):
+    """通知を送信する関数（経過時間に応じたメッセージ）"""
     global debug_mode
+    
+    # 経過時間をフォーマット
+    duration_text = format_duration_for_notification(elapsed_seconds)
+    
+    # 現在時刻を取得
+    current_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    # 設定から通知メッセージテンプレートを取得
+    message_template = get_setting('notification.notification_message', 'オレンジランプが{duration}間連続で点灯しています！')
+    
+    # メッセージテンプレートに値を埋め込み
+    message = message_template.format(
+        duration=duration_text,
+        timestamp=current_timestamp
+    )
+    
+    # 設定から通知情報を取得
+    title = get_setting('notification.notification_title', '検査場からの通知')
+    emails = get_setting('notification.mention_emails', ['to-murakami@akioka-ltd.jp', 'hide-inoue@akioka-ltd.jp'])
+    primary_method = get_setting('notification.primary_method', 'line')
+    enable_fallback = get_setting('notification.line_settings.enable_fallback_to_teams', True)
     
     print("\n" + "!" * 60)
     print("!!! 重要な通知 !!!")
@@ -1053,27 +1164,144 @@ def send_notification(message):
         print("!!! [DEBUG MODE] !!!")
     print("!" * 60)
     print(f"MESSAGE: {message}")
-    notify_teams(['to-murakami@akioka-ltd.jp', 'hide-inoue@akioka-ltd.jp'],'検査場からの通知','オレンジランプが10分間連続で点灯しています！')
-    print(f"TIME: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"ELAPSED: {elapsed_seconds:.1f}秒 ({duration_text})")
+    print(f"PRIMARY METHOD: {primary_method.upper()}")
+    
+    # 通知方法に応じて送信
+    notification_success = False
+    
+    if primary_method == 'line':
+        # LINE通知を送信
+        try:
+            notify_group(message)
+            print("✅ LINE通知を送信しました")
+            notification_success = True
+        except Exception as e:
+            print(f"❌ LINE通知の送信に失敗しました: {e}")
+            
+            # フォールバックとしてTeams通知を試行
+            if enable_fallback:
+                try:
+                    notify_teams(emails, title, message)
+                    print("✅ フォールバック: Teams通知を送信しました")
+                    notification_success = True
+                except Exception as teams_error:
+                    print(f"❌ Teams通知も失敗しました: {teams_error}")
+    else:
+        # Teams通知を送信
+        try:
+            notify_teams(emails, title, message)
+            print("✅ Teams通知を送信しました")
+            notification_success = True
+        except Exception as e:
+            print(f"❌ Teams通知の送信に失敗しました: {e}")
+    
+    if not notification_success:
+        print("❌ すべての通知方法が失敗しました")
+    
+    print(f"TIME: {current_timestamp}")
     if debug_mode:
-        print("WARNING: デバッグモード - 10秒間連続検知")
+        print(f"WARNING: デバッグモード - {elapsed_seconds:.1f}秒間連続検知")
     print("!" * 60)
     print()
 
+def format_duration_for_notification(seconds):
+    """通知用の継続時間フォーマット"""
+    global debug_mode
+    
+    if debug_mode:
+        return f"{seconds:.0f}秒"
+    else:
+        minutes = seconds / 60
+        if minutes < 60:
+            return f"{minutes:.0f}分"
+        else:
+            hours = minutes / 60
+            if hours < 24:
+                return f"{hours:.1f}時間"
+            else:
+                days = hours / 24
+                return f"{days:.1f}日"
+
+def should_send_notification(elapsed_seconds):
+    """通知を送信すべきかどうかを判定"""
+    global debug_mode, notification_history
+    
+    # 設定から通知間隔を取得
+    if debug_mode:
+        first_alert = get_setting('notification.notification_intervals.debug_first_alert_seconds', 10)
+        second_alert = get_setting('notification.notification_intervals.debug_second_alert_seconds', 30)
+        hourly_interval = get_setting('notification.notification_intervals.debug_hourly_alert_interval_seconds', 60)
+    else:
+        first_alert = get_setting('notification.notification_intervals.first_alert_minutes', 10) * 60
+        second_alert = get_setting('notification.notification_intervals.second_alert_minutes', 30) * 60
+        hourly_interval = get_setting('notification.notification_intervals.hourly_alert_interval_minutes', 60) * 60
+    
+    # 通知すべき時間のリストを作成
+    notification_times = [first_alert, second_alert]
+    
+    # 30分以降は1時間毎に通知
+    current_time = second_alert + hourly_interval
+    while current_time <= elapsed_seconds + hourly_interval:  # 少し余裕を持って
+        notification_times.append(current_time)
+        current_time += hourly_interval
+    
+    # まだ通知していない時間があるかチェック
+    for target_time in notification_times:
+        if elapsed_seconds >= target_time and target_time not in notification_history:
+            return True, target_time
+    
+    return False, None
+
+def reset_notification_history():
+    """通知履歴をリセット"""
+    global notification_history
+    notification_history = []
+
+def get_next_notification_time(elapsed_seconds):
+    """次回通知時間を取得"""
+    global debug_mode, notification_history
+    
+    # 設定から通知間隔を取得
+    if debug_mode:
+        first_alert = get_setting('notification.notification_intervals.debug_first_alert_seconds', 10)
+        second_alert = get_setting('notification.notification_intervals.debug_second_alert_seconds', 30)
+        hourly_interval = get_setting('notification.notification_intervals.debug_hourly_alert_interval_seconds', 60)
+    else:
+        first_alert = get_setting('notification.notification_intervals.first_alert_minutes', 10) * 60
+        second_alert = get_setting('notification.notification_intervals.second_alert_minutes', 30) * 60
+        hourly_interval = get_setting('notification.notification_intervals.hourly_alert_interval_minutes', 60) * 60
+    
+    # 通知すべき時間のリストを作成
+    notification_times = [first_alert, second_alert]
+    
+    # 30分以降は1時間毎に通知
+    current_time = second_alert + hourly_interval
+    while current_time <= elapsed_seconds + hourly_interval * 2:  # 余裕を持って
+        notification_times.append(current_time)
+        current_time += hourly_interval
+    
+    # まだ通知していない次の時間を探す
+    for target_time in sorted(notification_times):
+        if target_time > elapsed_seconds and target_time not in notification_history:
+            return target_time
+    
+    return None
+
 def update_detection_state(judgment, orange_percentage=0, green_percentage=0, image_file=""):
     """検知状態を更新し、必要に応じて通知を送信"""
-    global current_state, orange_detection_start_time, notification_sent, debug_mode
+    global current_state, orange_detection_start_time, notification_sent, notification_history, debug_mode
     
     current_time = datetime.now()
     time_unit = get_time_unit()
-    threshold_seconds = get_notification_threshold()
     
     if judgment == "オレンジ":
         if current_state != True:
             # オレンジ検知開始
             current_state = True
             orange_detection_start_time = current_time
-            notification_sent = False
+            notification_sent = False  # 後方互換性のため残す
+            reset_notification_history()  # 通知履歴をリセット
             debug_info = " [デバッグモード]" if debug_mode else ""
             print(f"[ORANGE] オレンジ検知開始: {current_time.strftime('%H:%M:%S')}{debug_info}")
             
@@ -1081,23 +1309,35 @@ def update_detection_state(judgment, orange_percentage=0, green_percentage=0, im
             log_to_csv("orange_start", judgment, orange_percentage, green_percentage, 0, image_file)
         else:
             # オレンジ継続検知中
-            if orange_detection_start_time and not notification_sent:
+            if orange_detection_start_time:
                 elapsed_time = current_time - orange_detection_start_time
                 elapsed_seconds = elapsed_time.total_seconds()
                 
-                if elapsed_seconds >= threshold_seconds:
-                    # 閾値時間連続でオレンジを検知
-                    message = f"オレンジランプが10{time_unit}間連続で点灯しています！"
-                    send_notification(message)
-                    notification_sent = True
+                # 段階的通知の判定
+                should_notify, target_time = should_send_notification(elapsed_seconds)
+                
+                if should_notify:
+                    # 通知を送信
+                    send_notification(elapsed_seconds)
+                    notification_history.append(target_time)
                     
                     # CSV記録: 通知送信
                     log_to_csv("notification", judgment, orange_percentage, green_percentage, elapsed_seconds, image_file)
+                    
+                    # 後方互換性のため最初の通知後はnotification_sentをTrueに
+                    if not notification_sent:
+                        notification_sent = True
                 else:
-                    # 残り時間を表示
-                    remaining_seconds = threshold_seconds - elapsed_seconds
-                    remaining_formatted = format_time_remaining(remaining_seconds)
-                    print(f"[ORANGE] オレンジ継続中 - 通知まで残り: {remaining_formatted}")
+                    # 次回通知までの時間を表示
+                    next_notification_time = get_next_notification_time(elapsed_seconds)
+                    if next_notification_time:
+                        remaining_seconds = next_notification_time - elapsed_seconds
+                        remaining_formatted = format_time_remaining(remaining_seconds)
+                        duration_formatted = format_duration_for_notification(elapsed_seconds)
+                        print(f"[ORANGE] オレンジ継続中 ({duration_formatted}) - 次回通知まで残り: {remaining_formatted}")
+                    else:
+                        duration_formatted = format_duration_for_notification(elapsed_seconds)
+                        print(f"[ORANGE] オレンジ継続中 ({duration_formatted})")
                     
                     # CSV記録: オレンジ継続
                     log_to_csv("orange_continue", judgment, orange_percentage, green_percentage, elapsed_seconds, image_file)
@@ -1128,6 +1368,7 @@ def update_detection_state(judgment, orange_percentage=0, green_percentage=0, im
         current_state = None
         orange_detection_start_time = None
         notification_sent = False
+        reset_notification_history()  # 通知履歴もリセット
         
     else:  # judgment == "不明" or その他
         duration = 0
@@ -1146,6 +1387,7 @@ def update_detection_state(judgment, orange_percentage=0, green_percentage=0, im
         current_state = None
         orange_detection_start_time = None
         notification_sent = False
+        reset_notification_history()  # 通知履歴もリセット
     
     return current_state
 
@@ -1566,6 +1808,7 @@ def run_loop_mode(mode="fixed", interval_minutes=10):
     current_state = None
     orange_detection_start_time = None
     notification_sent = False
+    reset_notification_history()  # 通知履歴もリセット
     
     # CSVログファイルを初期化
     initialize_csv_log()

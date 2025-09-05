@@ -1,485 +1,450 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>設定編集 - ランプ検知システム</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            color: #333;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-        }
-        
-        .header {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 15px;
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            text-align: center;
-        }
-        
-        .settings-form {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 15px;
-            padding: 30px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        }
-        
-        .section {
-            margin-bottom: 40px;
-            padding: 20px;
-            border: 2px solid #e2e8f0;
-            border-radius: 10px;
-        }
-        
-        .section h3 {
-            color: #4a5568;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #e2e8f0;
-        }
-        
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 2fr;
-            gap: 15px;
-            margin-bottom: 15px;
-            align-items: center;
-        }
-        
-        .form-label {
-            font-weight: 600;
-            color: #4a5568;
-        }
-        
-        .form-input {
-            padding: 10px 15px;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: border-color 0.3s ease;
-        }
-        
-        .form-input:focus {
-            outline: none;
-            border-color: #4299e1;
-            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
-        }
-        
-        .form-checkbox {
-            transform: scale(1.5);
-        }
-        
-        .coordinate-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
-        }
-        
-        .coordinate-input {
-            text-align: center;
-        }
-        
-        .btn {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            margin: 5px;
-        }
-        
-        .btn-primary {
-            background: #4299e1;
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            background: #3182ce;
-            transform: translateY(-2px);
-        }
-        
-        .btn-success {
-            background: #48bb78;
-            color: white;
-        }
-        
-        .btn-success:hover {
-            background: #38a169;
-            transform: translateY(-2px);
-        }
-        
-        .btn-secondary {
-            background: #718096;
-            color: white;
-        }
-        
-        .btn-secondary:hover {
-            background: #4a5568;
-            transform: translateY(-2px);
-        }
-        
-        .action-buttons {
-            text-align: center;
-            margin-top: 40px;
-            padding-top: 30px;
-            border-top: 2px solid #e2e8f0;
-        }
-        
-        .error-message {
-            background: #fed7d7;
-            color: #c53030;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            border-left: 5px solid #f56565;
-        }
-        
-        .success-message {
-            background: #c6f6d5;
-            color: #276749;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            border-left: 5px solid #48bb78;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <!-- ヘッダー -->
-        <div class="header">
-            <h1>⚙️ 設定編集</h1>
-            <p>ランプ検知システムの各種設定を変更できます</p>
-        </div>
-        
-        <!-- 設定フォーム -->
-        <form id="settingsForm" class="settings-form">
-            <!-- カメラ設定 -->
-            <div class="section">
-                <h3>📷 カメラ設定</h3>
-                
-                <div class="form-row">
-                    <label class="form-label">カメラ検索範囲:</label>
-                    <input type="number" class="form-input" name="camera.search_range" 
-                           value="{{ settings.camera.search_range }}" min="1" max="10">
-                </div>
-                
-                <div class="form-row">
-                    <label class="form-label">キャプチャ幅:</label>
-                    <input type="number" class="form-input" name="camera.capture_width" 
-                           value="{{ settings.camera.capture_width }}" min="320" max="1920">
-                </div>
-                
-                <div class="form-row">
-                    <label class="form-label">キャプチャ高さ:</label>
-                    <input type="number" class="form-input" name="camera.capture_height" 
-                           value="{{ settings.camera.capture_height }}" min="240" max="1080">
-                </div>
-            </div>
-            
-            <!-- 検知設定 -->
-            <div class="section">
-                <h3>🔍 検知設定</h3>
-                
-                <div class="form-row">
-                    <label class="form-label">検知間隔（秒）:</label>
-                    <input type="number" class="form-input" name="detection.detection_interval_seconds" 
-                           value="{{ settings.detection.detection_interval_seconds }}" min="1" max="3600">
-                </div>
-                
-                <div class="form-row">
-                    <label class="form-label">デバッグ検知間隔（秒）:</label>
-                    <input type="number" class="form-input" name="detection.debug_detection_interval_seconds" 
-                           value="{{ settings.detection.debug_detection_interval_seconds }}" min="1" max="60">
-                </div>
-                
-                <div class="form-row">
-                    <label class="form-label">通知閾値（分）:</label>
-                    <input type="number" class="form-input" name="detection.notification_threshold_minutes" 
-                           value="{{ settings.detection.notification_threshold_minutes }}" min="1" max="120">
-                </div>
-                
-                <div class="form-row">
-                    <label class="form-label">デバッグ通知閾値（秒）:</label>
-                    <input type="number" class="form-input" name="detection.debug_notification_threshold_seconds" 
-                           value="{{ settings.detection.debug_notification_threshold_seconds }}" min="1" max="300">
-                </div>
-                
-                <div class="form-row">
-                    <label class="form-label">色検出閾値（%）:</label>
-                    <input type="number" class="form-input" name="detection.color_detection_threshold_percentage" 
-                           value="{{ settings.detection.color_detection_threshold_percentage }}" min="0" max="100" step="0.1">
-                </div>
-            </div>
-            
-            <!-- 座標設定 -->
-            <div class="section">
-                <h3>📍 座標設定</h3>
-                
-                <h4 style="color: #ed8936; margin-bottom: 15px;">🟠 オレンジランプ座標</h4>
-                <div class="coordinate-grid">
-                    <div>
-                        <label class="form-label">X1:</label>
-                        <input type="number" class="form-input coordinate-input" name="coordinates.orange.x1" 
-                               value="{{ settings.coordinates.orange.x1 }}" min="0">
-                    </div>
-                    <div>
-                        <label class="form-label">Y1:</label>
-                        <input type="number" class="form-input coordinate-input" name="coordinates.orange.y1" 
-                               value="{{ settings.coordinates.orange.y1 }}" min="0">
-                    </div>
-                    <div>
-                        <label class="form-label">X2:</label>
-                        <input type="number" class="form-input coordinate-input" name="coordinates.orange.x2" 
-                               value="{{ settings.coordinates.orange.x2 }}" min="0">
-                    </div>
-                    <div>
-                        <label class="form-label">Y2:</label>
-                        <input type="number" class="form-input coordinate-input" name="coordinates.orange.y2" 
-                               value="{{ settings.coordinates.orange.y2 }}" min="0">
-                    </div>
-                </div>
-                
-                <h4 style="color: #48bb78; margin: 20px 0 15px 0;">🟢 緑ランプ座標</h4>
-                <div class="coordinate-grid">
-                    <div>
-                        <label class="form-label">X1:</label>
-                        <input type="number" class="form-input coordinate-input" name="coordinates.green.x1" 
-                               value="{{ settings.coordinates.green.x1 }}" min="0">
-                    </div>
-                    <div>
-                        <label class="form-label">Y1:</label>
-                        <input type="number" class="form-input coordinate-input" name="coordinates.green.y1" 
-                               value="{{ settings.coordinates.green.y1 }}" min="0">
-                    </div>
-                    <div>
-                        <label class="form-label">X2:</label>
-                        <input type="number" class="form-input coordinate-input" name="coordinates.green.x2" 
-                               value="{{ settings.coordinates.green.x2 }}" min="0">
-                    </div>
-                    <div>
-                        <label class="form-label">Y2:</label>
-                        <input type="number" class="form-input coordinate-input" name="coordinates.green.y2" 
-                               value="{{ settings.coordinates.green.y2 }}" min="0">
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 表示設定 -->
-            <div class="section">
-                <h3>🖥️ 表示設定</h3>
-                
-                <div class="form-row">
-                    <label class="form-label">全画面表示:</label>
-                    <input type="checkbox" class="form-checkbox" name="display.fullscreen" 
-                           {% if settings.display.fullscreen %}checked{% endif %}>
-                </div>
-                
-                <div class="form-row">
-                    <label class="form-label">デフォルトフォントサイズ:</label>
-                    <input type="number" class="form-input" name="display.font_scale_default" 
-                           value="{{ settings.display.font_scale_default }}" min="0.1" max="2.0" step="0.05">
-                </div>
-                
-                <div class="form-row">
-                    <label class="form-label">タイトルフォントサイズ:</label>
-                    <input type="number" class="form-input" name="display.font_scale_title" 
-                           value="{{ settings.display.font_scale_title }}" min="0.1" max="2.0" step="0.05">
-                </div>
-                
-                <div class="form-row">
-                    <label class="form-label">ログフォントサイズ:</label>
-                    <input type="number" class="form-input" name="display.font_scale_logs" 
-                           value="{{ settings.display.font_scale_logs }}" min="0.1" max="1.0" step="0.05">
-                </div>
-                
-                <div class="form-row">
-                    <label class="form-label">履歴表示件数:</label>
-                    <input type="number" class="form-input" name="display.recent_logs_display" 
-                           value="{{ settings.display.recent_logs_display }}" min="1" max="20">
-                </div>
-            </div>
-            
-            <!-- 通知設定 -->
-            <div class="section">
-                <h3>📢 通知設定</h3>
-                
-                <div class="form-row">
-                    <label class="form-label">Teams Webhook URL:</label>
-                    <input type="url" class="form-input" name="notification.teams_webhook_url" 
-                           value="{{ settings.notification.teams_webhook_url }}">
-                </div>
-                
-                <div class="form-row">
-                    <label class="form-label">通知先メール（カンマ区切り）:</label>
-                    <input type="text" class="form-input" name="notification.mention_emails" 
-                           value="{{ settings.notification.mention_emails | join(', ') }}">
-                </div>
-                
-                <div class="form-row">
-                    <label class="form-label">通知タイトル:</label>
-                    <input type="text" class="form-input" name="notification.notification_title" 
-                           value="{{ settings.notification.notification_title }}">
-                </div>
-                
-                <div class="form-row">
-                    <label class="form-label">通知メッセージ:</label>
-                    <input type="text" class="form-input" name="notification.notification_message" 
-                           value="{{ settings.notification.notification_message }}">
-                </div>
-            </div>
-            
-            <!-- 操作ボタン -->
-            <div class="action-buttons">
-                <button type="button" class="btn btn-success" onclick="saveSettings()">💾 設定を保存</button>
-                <button type="button" class="btn btn-secondary" onclick="resetForm()">🔄 リセット</button>
-                <a href="/" class="btn btn-primary">🏠 メインページに戻る</a>
-            </div>
-        </form>
-    </div>
-    
-    <!-- 再起動確認ダイアログ -->
-    <div id="restartDialog" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 1000;">
-        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 15px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); text-align: center; max-width: 500px;">
-            <h3 style="color: #4a5568; margin-bottom: 20px;">🔄 カメラ監視システムの再起動</h3>
-            <p style="color: #718096; margin-bottom: 30px; line-height: 1.6;">
-                設定変更を反映するために、カメラ監視システムを再起動しますか？<br>
-                <strong>注意:</strong> 現在の監視状態はリセットされます。
-            </p>
+{% extends "base.html" %}
+
+{% block title %}設定管理 - ランプ検知システム{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-cog text-info"></i> 設定管理</h2>
             <div>
-                <button class="btn btn-success" onclick="executeRestart()">✅ 再起動する</button>
-                <button class="btn btn-secondary" onclick="hideRestartDialog()">❌ キャンセル</button>
+                <button id="save-settings" class="btn btn-success">
+                    <i class="fas fa-save"></i> 設定を保存
+                </button>
+                <button id="reset-settings" class="btn btn-warning">
+                    <i class="fas fa-undo"></i> 初期値に戻す
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- 検知設定 -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-search"></i> 検知設定
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="detection-threshold" class="form-label">色検知閾値 (%)</label>
+                    <input type="number" class="form-control" id="detection-threshold" min="0" max="100" step="0.1">
+                    <div class="form-text">ランプ色として認識する最小の含有率</div>
+        </div>
+        
+                <div class="mb-3">
+                    <label for="brightness-threshold" class="form-label">明度閾値</label>
+                    <input type="number" class="form-control" id="brightness-threshold" min="0" max="255">
+                    <div class="form-text">画像の明度判定基準</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="minimum-pixel-count" class="form-label">最小ピクセル数</label>
+                    <input type="number" class="form-control" id="minimum-pixel-count" min="1">
+                    <div class="form-text">検知に必要な最小ピクセル数</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="detection-mode" class="form-label">色検知モード</label>
+                    <select class="form-select" id="detection-mode">
+                        <option value="default">デフォルト</option>
+                        <option value="enhanced">拡張（検知範囲を広げる）</option>
+                        <option value="strict">厳格（誤検知を減らす）</option>
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="detection-interval" class="form-label">検知間隔（秒）</label>
+                    <input type="number" class="form-control" id="detection-interval" min="1">
+                    <div class="form-text">通常モードでの検知実行間隔</div>
+                </div>
+            </div>
+                </div>
+            </div>
+            
+    <!-- 通知設定 -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-bell"></i> 通知設定
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="notification-method" class="form-label">通知方法</label>
+                    <select class="form-select" id="notification-method">
+                        <option value="line">LINE</option>
+                        <option value="teams">Microsoft Teams</option>
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="first-alert" class="form-label">初回通知（分）</label>
+                    <input type="number" class="form-control" id="first-alert" min="1">
+                    <div class="form-text">オレンジ検知後、初回通知までの時間</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="second-alert" class="form-label">2回目通知（分）</label>
+                    <input type="number" class="form-control" id="second-alert" min="1">
+                    <div class="form-text">2回目の通知までの時間</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="hourly-interval" class="form-label">定期通知間隔（分）</label>
+                    <input type="number" class="form-control" id="hourly-interval" min="1">
+                    <div class="form-text">2回目以降の定期通知間隔</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="notification-message" class="form-label">通知メッセージテンプレート</label>
+                    <textarea class="form-control" id="notification-message" rows="3"></textarea>
+                    <div class="form-text">
+                        使用可能な変数: {duration}, {timestamp}
+                    </div>
+                </div>
+            </div>
+                    </div>
+                    </div>
+                    </div>
+
+<div class="row">
+    <!-- カメラ設定 -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-camera"></i> カメラ設定
+                </h5>
+                    </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="camera-index" class="form-label">カメラインデックス</label>
+                    <input type="number" class="form-control" id="camera-index" min="0">
+                    <div class="form-text">使用するカメラデバイスの番号</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="capture-width" class="form-label">キャプチャ幅</label>
+                    <input type="number" class="form-control" id="capture-width" min="320">
+                </div>
+                
+                <div class="mb-3">
+                    <label for="capture-height" class="form-label">キャプチャ高さ</label>
+                    <input type="number" class="form-control" id="capture-height" min="240">
+                </div>
+                
+                <div class="mb-3">
+                    <label for="camera-search-range" class="form-label">カメラ検索範囲</label>
+                    <input type="number" class="form-control" id="camera-search-range" min="1" max="10">
+                    <div class="form-text">利用可能なカメラを検索する範囲</div>
+                </div>
             </div>
         </div>
     </div>
     
+    <!-- 表示設定 -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-desktop"></i> 表示設定
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="fullscreen-mode">
+                        <label class="form-check-label" for="fullscreen-mode">
+                            全画面表示
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="window-title" class="form-label">ウィンドウタイトル</label>
+                    <input type="text" class="form-control" id="window-title">
+                </div>
+                
+                <div class="mb-3">
+                    <label for="font-scale" class="form-label">フォントスケール</label>
+                    <input type="number" class="form-control" id="font-scale" min="0.1" max="2.0" step="0.1">
+                    <div class="form-text">表示テキストのサイズ調整</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="recent-logs-display" class="form-label">表示ログ数</label>
+                    <input type="number" class="form-control" id="recent-logs-display" min="1" max="20">
+                    <div class="form-text">画面に表示する最新ログの件数</div>
+                </div>
+            </div>
+        </div>
+                </div>
+            </div>
+            
+<div class="row">
+    <!-- 画像処理設定 -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-image"></i> 画像処理設定
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="apply-preprocessing">
+                        <label class="form-check-label" for="apply-preprocessing">
+                            前処理を適用
+                        </label>
+                        <div class="form-text">ノイズ除去と色強調処理を実行</div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="gaussian-blur" class="form-label">ガウシアンブラーカーネル</label>
+                    <input type="number" class="form-control" id="gaussian-blur" min="1" max="15" step="2">
+                    <div class="form-text">奇数値のみ（ノイズ除去の強度）</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="saturation-enhancement" class="form-label">彩度強調係数</label>
+                    <input type="number" class="form-control" id="saturation-enhancement" min="0.5" max="3.0" step="0.1">
+                    <div class="form-text">1.0が標準、大きいほど彩度を強調</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- システム設定 -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-server"></i> システム設定
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="debug-mode">
+                        <label class="form-check-label" for="debug-mode">
+                            デバッグモード
+                        </label>
+                        <div class="form-text">時間単位を分→秒に変更</div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="csv-encoding" class="form-label">CSVエンコーディング</label>
+                    <select class="form-select" id="csv-encoding">
+                        <option value="utf-8">UTF-8</option>
+                        <option value="shift_jis">Shift_JIS</option>
+                        <option value="cp932">CP932</option>
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="random-image-count" class="form-label">ランダム画像数</label>
+                    <input type="number" class="form-control" id="random-image-count" min="1" max="20">
+                    <div class="form-text">1.png～N.pngの範囲</div>
+                </div>
+            </div>
+            </div>
+    </div>
+    </div>
+    
+<!-- 現在の設定表示 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-code"></i> 現在の設定（JSON）
+                </h5>
+            </div>
+            <div class="card-body">
+                <pre id="current-settings-json" class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto;"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+    
+{% block scripts %}
     <script>
-        function saveSettings() {
-            const form = document.getElementById('settingsForm');
-            const formData = new FormData(form);
+class SettingsManager {
+    constructor() {
+        this.settings = {};
+        this.init();
+    }
+    
+    init() {
+        this.setupEventListeners();
+        this.loadSettings();
+    }
+    
+    setupEventListeners() {
+        document.getElementById('save-settings').addEventListener('click', () => this.saveSettings());
+        document.getElementById('reset-settings').addEventListener('click', () => this.resetSettings());
+        
+        // 設定値変更時のリアルタイム更新
+        const inputs = document.querySelectorAll('input, select, textarea');
+        inputs.forEach(input => {
+            input.addEventListener('change', () => this.updateSettingsFromForm());
+            input.addEventListener('input', () => this.updateSettingsFromForm());
+        });
+    }
+    
+    async loadSettings() {
+        try {
+            const response = await fetch('/api/settings');
+            const settings = await response.json();
             
-            // フォームデータをJSONに変換
-            const settings = {};
-            
-            // 基本的な値の処理
-            for (let [key, value] of formData.entries()) {
-                const keys = key.split('.');
-                let current = settings;
-                
-                // ネストしたオブジェクトを作成
-                for (let i = 0; i < keys.length - 1; i++) {
-                    if (!current[keys[i]]) {
-                        current[keys[i]] = {};
-                    }
-                    current = current[keys[i]];
-                }
-                
-                // 値の型変換
-                const lastKey = keys[keys.length - 1];
-                if (key.includes('fullscreen')) {
-                    current[lastKey] = true; // チェックボックスがチェックされている場合
-                } else if (value.includes(',')) {
-                    // カンマ区切りの場合は配列に変換
-                    current[lastKey] = value.split(',').map(s => s.trim());
-                } else if (!isNaN(value) && value !== '') {
-                    // 数値の場合
-                    current[lastKey] = parseFloat(value);
-                } else {
-                    current[lastKey] = value;
-                }
+            if (settings.error) {
+                showAlert(settings.error, 'danger');
+                return;
             }
             
-            // チェックボックスの未チェック状態を処理
-            if (!formData.has('display.fullscreen')) {
-                if (!settings.display) settings.display = {};
-                settings.display.fullscreen = false;
-            }
-            
-            // 元の設定を読み込んで、編集されていない部分を保持
-            fetch('/api/settings')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        const mergedSettings = { ...data.data, ...settings };
-                        
-                        // 設定を保存
-                        fetch('/api/settings', {
+            this.settings = settings;
+            this.populateForm();
+            this.updateJsonDisplay();
+            showAlert('設定を読み込みました', 'success');
+        } catch (error) {
+            console.error('設定読み込みエラー:', error);
+            showAlert('設定の読み込みに失敗しました', 'danger');
+        }
+    }
+    
+    populateForm() {
+        // 検知設定
+        document.getElementById('detection-threshold').value = this.settings.detection?.color_detection_threshold_percentage || 50;
+        document.getElementById('brightness-threshold').value = this.settings.detection?.brightness_threshold_high || 100;
+        document.getElementById('minimum-pixel-count').value = this.settings.detection?.minimum_pixel_count || 100;
+        document.getElementById('detection-mode').value = this.settings.detection?.color_detection_mode || 'strict';
+        document.getElementById('detection-interval').value = this.settings.detection?.detection_interval_seconds || 60;
+        
+        // 通知設定
+        document.getElementById('notification-method').value = this.settings.notification?.primary_method || 'line';
+        document.getElementById('first-alert').value = this.settings.notification?.notification_intervals?.first_alert_minutes || 10;
+        document.getElementById('second-alert').value = this.settings.notification?.notification_intervals?.second_alert_minutes || 30;
+        document.getElementById('hourly-interval').value = this.settings.notification?.notification_intervals?.hourly_alert_interval_minutes || 60;
+        document.getElementById('notification-message').value = this.settings.notification?.notification_message || '';
+        
+        // カメラ設定
+        document.getElementById('camera-index').value = this.settings.camera?.camera_index || 0;
+        document.getElementById('capture-width').value = this.settings.camera?.capture_width || 640;
+        document.getElementById('capture-height').value = this.settings.camera?.capture_height || 480;
+        document.getElementById('camera-search-range').value = this.settings.camera?.search_range || 5;
+        
+        // 表示設定
+        document.getElementById('fullscreen-mode').checked = this.settings.display?.fullscreen || false;
+        document.getElementById('window-title').value = this.settings.display?.window_title || '';
+        document.getElementById('font-scale').value = this.settings.display?.font_scale_default || 0.35;
+        document.getElementById('recent-logs-display').value = this.settings.display?.recent_logs_display || 5;
+        
+        // 画像処理設定
+        document.getElementById('apply-preprocessing').checked = this.settings.image_processing?.apply_preprocessing || true;
+        document.getElementById('gaussian-blur').value = this.settings.image_processing?.gaussian_blur_kernel || 3;
+        document.getElementById('saturation-enhancement').value = this.settings.image_processing?.saturation_enhancement_factor || 1.2;
+        
+        // システム設定
+        document.getElementById('debug-mode').checked = this.settings.system?.debug_mode || false;
+        document.getElementById('csv-encoding').value = this.settings.system?.csv_encoding || 'utf-8';
+        document.getElementById('random-image-count').value = this.settings.files?.random_image_count || 4;
+    }
+    
+    updateSettingsFromForm() {
+        // 検知設定
+        this.settings.detection = this.settings.detection || {};
+        this.settings.detection.color_detection_threshold_percentage = parseFloat(document.getElementById('detection-threshold').value);
+        this.settings.detection.brightness_threshold_high = parseFloat(document.getElementById('brightness-threshold').value);
+        this.settings.detection.minimum_pixel_count = parseInt(document.getElementById('minimum-pixel-count').value);
+        this.settings.detection.color_detection_mode = document.getElementById('detection-mode').value;
+        this.settings.detection.detection_interval_seconds = parseInt(document.getElementById('detection-interval').value);
+        
+        // 通知設定
+        this.settings.notification = this.settings.notification || {};
+        this.settings.notification.notification_intervals = this.settings.notification.notification_intervals || {};
+        this.settings.notification.primary_method = document.getElementById('notification-method').value;
+        this.settings.notification.notification_intervals.first_alert_minutes = parseInt(document.getElementById('first-alert').value);
+        this.settings.notification.notification_intervals.second_alert_minutes = parseInt(document.getElementById('second-alert').value);
+        this.settings.notification.notification_intervals.hourly_alert_interval_minutes = parseInt(document.getElementById('hourly-interval').value);
+        this.settings.notification.notification_message = document.getElementById('notification-message').value;
+        
+        // カメラ設定
+        this.settings.camera = this.settings.camera || {};
+        this.settings.camera.camera_index = parseInt(document.getElementById('camera-index').value);
+        this.settings.camera.capture_width = parseInt(document.getElementById('capture-width').value);
+        this.settings.camera.capture_height = parseInt(document.getElementById('capture-height').value);
+        this.settings.camera.search_range = parseInt(document.getElementById('camera-search-range').value);
+        
+        // 表示設定
+        this.settings.display = this.settings.display || {};
+        this.settings.display.fullscreen = document.getElementById('fullscreen-mode').checked;
+        this.settings.display.window_title = document.getElementById('window-title').value;
+        this.settings.display.font_scale_default = parseFloat(document.getElementById('font-scale').value);
+        this.settings.display.recent_logs_display = parseInt(document.getElementById('recent-logs-display').value);
+        
+        // 画像処理設定
+        this.settings.image_processing = this.settings.image_processing || {};
+        this.settings.image_processing.apply_preprocessing = document.getElementById('apply-preprocessing').checked;
+        this.settings.image_processing.gaussian_blur_kernel = parseInt(document.getElementById('gaussian-blur').value);
+        this.settings.image_processing.saturation_enhancement_factor = parseFloat(document.getElementById('saturation-enhancement').value);
+        
+        // システム設定
+        this.settings.system = this.settings.system || {};
+        this.settings.system.debug_mode = document.getElementById('debug-mode').checked;
+        this.settings.system.csv_encoding = document.getElementById('csv-encoding').value;
+        this.settings.files = this.settings.files || {};
+        this.settings.files.random_image_count = parseInt(document.getElementById('random-image-count').value);
+        
+        this.updateJsonDisplay();
+    }
+    
+    updateJsonDisplay() {
+        const jsonElement = document.getElementById('current-settings-json');
+        jsonElement.textContent = JSON.stringify(this.settings, null, 2);
+    }
+    
+    async saveSettings() {
+        try {
+            const response = await fetch('/api/settings', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json'
                             },
-                            body: JSON.stringify(mergedSettings)
-                        })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                alert('✅ 設定を保存しました');
-                                showRestartDialog();
-                            } else {
-                                alert('❌ エラー: ' + (data.errors ? data.errors.join(', ') : data.error));
-                            }
-                        })
-                        .catch(error => {
-                            alert('❌ 通信エラー: ' + error);
-                        });
-                    }
-                })
-                .catch(error => {
-                    alert('❌ 設定の読み込みエラー: ' + error);
-                });
-        }
-        
-        function resetForm() {
-            if (confirm('設定をリセットしますか？')) {
-                location.reload();
-            }
-        }
-        
-        function showRestartDialog() {
-            document.getElementById('restartDialog').style.display = 'block';
-        }
-        
-        function hideRestartDialog() {
-            document.getElementById('restartDialog').style.display = 'none';
-        }
-        
-        function executeRestart() {
-            hideRestartDialog();
+                body: JSON.stringify(this.settings)
+            });
             
-            fetch('/api/main/restart', { method: 'POST' })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert('✅ カメラ監視システムを再起動しました');
-                        setTimeout(() => {
-                            window.location.href = '/';
-                        }, 2000);
-                    } else {
-                        alert('❌ エラー: ' + data.error);
-                    }
-                })
-                .catch(error => {
-                    alert('❌ 通信エラー: ' + error);
-                });
+            const result = await response.json();
+            if (result.success) {
+                showAlert(result.message, 'success');
+            } else {
+                showAlert(result.message, 'danger');
+            }
+        } catch (error) {
+            console.error('設定保存エラー:', error);
+            showAlert('設定の保存に失敗しました', 'danger');
         }
+    }
+    
+    resetSettings() {
+        if (confirm('設定を初期値に戻しますか？この操作は取り消せません。')) {
+            this.loadSettings(); // サーバーから再読み込み
+            showAlert('設定を初期値に戻しました', 'info');
+        }
+    }
+}
+
+// ページ読み込み時に初期化
+document.addEventListener('DOMContentLoaded', function() {
+    new SettingsManager();
+});
     </script>
-</body>
-</html>
+{% endblock %}

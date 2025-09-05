@@ -18,16 +18,16 @@
   },
   "coordinates": {
     "orange": {
-      "x1": 297,
-      "y1": 86,
-      "x2": 347,
-      "y2": 133
+      "x1": 317,
+      "y1": 97,
+      "x2": 362,
+      "y2": 145
     },
     "green": {
-      "x1": 303,
-      "y1": 110,
-      "x2": 350,
-      "y2": 164
+      "x1": 315,
+      "y1": 130,
+      "x2": 363,
+      "y2": 180
     }
   },
   "color_ranges": {
@@ -95,7 +95,11 @@
     "csv_log_file": "data.csv",
     "temp_file_prefix": "temp_frame_",
     "camera_capture_prefix": "camera_capture_",
-    "excluded_files": ["orange.png", "green.png", "cut.png"],
+    "excluded_files": [
+      "orange.png",
+      "green.png",
+      "cut.png"
+    ],
     "random_image_count": 4,
     "random_image_prefix": ""
   },
@@ -112,10 +116,27 @@
     "recent_logs_display": 5
   },
   "notification": {
+    "primary_method": "line",
     "teams_webhook_url": "https://1966akioka.webhook.office.com/webhookb2/24ce70d8-1691-4b5e-aa90-67e8f56b36de@2f4ef158-134f-4faa-8db9-ef94be3b003a/IncomingWebhook/06ec01534f77477f9679950d30ee326e/2300d87e-df72-43f2-9367-9269f638e309/V2IJW5BzNLuCXyS-1pxN-7C7Kz4wq_zOJuSow6OIc6hWU1",
-    "mention_emails": ["to-murakami@akioka-ltd.jp", "hide-inoue@akioka-ltd.jp"],
+    "mention_emails": [
+      "to-murakami@akioka-ltd.jp",
+      "hide-inoue@akioka-ltd.jp"
+    ],
     "notification_title": "検査場からの通知",
-    "notification_message": "オレンジランプが10分間連続で点灯しています！"
+    "notification_message": "🚨 オレンジランプが{duration}間連続で点灯しています！\n\n📅 時刻: {timestamp}\n⚠️ 至急確認をお願いします。",
+    "line_settings": {
+      "enable_fallback_to_teams": true,
+      "add_timestamp": true,
+      "add_emoji": true
+    },
+    "notification_intervals": {
+      "first_alert_minutes": 10,
+      "second_alert_minutes": 30,
+      "hourly_alert_interval_minutes": 60,
+      "debug_first_alert_seconds": 10,
+      "debug_second_alert_seconds": 30,
+      "debug_hourly_alert_interval_seconds": 60
+    }
   },
   "system": {
     "debug_mode": false,

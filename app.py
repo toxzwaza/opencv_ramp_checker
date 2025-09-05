@@ -15,8 +15,21 @@ import signal
 import psutil
 import cv2
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 import base64
+import csv
+import matplotlib
+matplotlib.use('Agg')  # GUI不要のバックエンドを使用
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+
+# matplotlib の設定
+matplotlib.rcParams['axes.formatter.limits'] = [-5, 6]
+matplotlib.rcParams['axes.formatter.use_mathtext'] = True
+# 図の最大数制限（警告を防ぐ）
+matplotlib.rcParams['figure.max_open_warning'] = 50
+from io import BytesIO
+import pandas as pd
 
 app = Flask(__name__)
 app.secret_key = 'lamp_detection_system_secret_key'
@@ -250,6 +263,128 @@ def stop_main():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# ========================================
+# 監視システム API（monitoring.htmlとbase.html用）
+# ========================================
+
+@app.route('/api/monitoring/status', methods=['GET'])
+def get_monitoring_status():
+    """監視システムの状態を取得"""
+    try:
+        running = is_main_running()
+        pid = main_process.pid if main_process else None
+        
+        return jsonify({
+            'running': running,
+            'pid': pid,
+            'timestamp': datetime.now().isoformat(),
+            'uptime': None  # 将来的な拡張用
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/monitoring/start', methods=['POST'])
+def start_monitoring():
+    """監視システムを開始"""
+    try:
+        success = start_main_process()
+        if success:
+            return jsonify({'success': True, 'message': '監視システムを開始しました'})
+        else:
+            return jsonify({'success': False, 'message': '監視システムの開始に失敗しました'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'エラー: {str(e)}'})
+
+@app.route('/api/monitoring/stop', methods=['POST'])
+def stop_monitoring():
+    """監視システムを停止"""
+    try:
+        success = stop_main_process()
+        if success:
+            return jsonify({'success': True, 'message': '監視システムを停止しました'})
+        else:
+            return jsonify({'success': False, 'message': '監視システムの停止に失敗しました'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'エラー: {str(e)}'})
+
+# ========================================
+# 画像関連 API（monitoring.html用）
+# ========================================
+
+@app.route('/api/image/latest', methods=['GET'])
+def get_latest_image():
+    """最新の画像を取得"""
+    try:
+        # streaming/current_frame.jpgを確認
+        current_frame_path = os.path.join("streaming", "current_frame.jpg")
+        
+        if os.path.exists(current_frame_path):
+            # ファイルの更新時刻をチェック
+            file_time = os.path.getmtime(current_frame_path)
+            current_time = time.time()
+            
+            # 5分以上古い場合は「接続なし」画像を返す
+            if current_time - file_time > 300:  # 5分
+                error_frame = create_no_connection_frame()
+                _, buffer = cv2.imencode('.jpg', error_frame)
+                return Response(buffer.tobytes(), mimetype='image/jpeg')
+            
+            # 最新の画像ファイルを返す
+            with open(current_frame_path, 'rb') as f:
+                image_data = f.read()
+            
+            return Response(image_data, mimetype='image/jpeg')
+        else:
+            # 画像がない場合は「待機中」画像を返す
+            waiting_frame = create_waiting_frame()
+            _, buffer = cv2.imencode('.jpg', waiting_frame)
+            return Response(buffer.tobytes(), mimetype='image/jpeg')
+            
+    except Exception as e:
+        print(f"[ERROR] 最新画像取得エラー: {e}")
+        error_frame = create_error_frame()
+        _, buffer = cv2.imencode('.jpg', error_frame)
+        return Response(buffer.tobytes(), mimetype='image/jpeg')
+
+@app.route('/api/image/capture', methods=['POST'])
+def capture_image():
+    """カメラから画像をキャプチャ"""
+    try:
+        # カメラから画像をキャプチャ（main.pyの機能を利用）
+        camera_index = find_available_camera()
+        if camera_index is None:
+            return jsonify({'success': False, 'message': 'カメラが利用できません'})
+        
+        cap = cv2.VideoCapture(camera_index)
+        if not cap.isOpened():
+            return jsonify({'success': False, 'message': 'カメラを開けませんでした'})
+        
+        try:
+            ret, frame = cap.read()
+            if not ret:
+                return jsonify({'success': False, 'message': 'フレームを取得できませんでした'})
+            
+            # タイムスタンプ付きのファイル名で保存
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            capture_filename = f"manual_capture_{timestamp}.png"
+            capture_path = os.path.join("sample_img", capture_filename)
+            
+            if cv2.imwrite(capture_path, frame):
+                return jsonify({
+                    'success': True, 
+                    'message': f'画像をキャプチャしました: {capture_filename}',
+                    'filename': capture_filename,
+                    'path': capture_path
+                })
+            else:
+                return jsonify({'success': False, 'message': '画像の保存に失敗しました'})
+                
+        finally:
+            cap.release()
+            
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'キャプチャエラー: {str(e)}'})
+
 @app.route('/settings')
 def settings_page():
     """設定編集ページ"""
@@ -262,6 +397,16 @@ def coordinates_page():
     settings = load_settings()
     main_running = is_main_running()
     return render_template('coordinates.html', settings=settings, main_running=main_running)
+
+@app.route('/monitoring')
+def monitoring_page():
+    """監視状況ページ"""
+    settings = load_settings()
+    main_running = is_main_running()
+    return render_template('monitoring.html', 
+                         settings=settings, 
+                         main_running=main_running,
+                         current_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
 @app.route('/api/coordinates/start', methods=['POST'])
 def start_coordinate_setter():
@@ -839,6 +984,450 @@ def stop_camera_api():
             return jsonify({'success': True, 'message': 'カメラフィードを停止しました'})
         else:
             return jsonify({'success': False, 'error': 'カメラフィードの停止に失敗しました'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ========================================
+# オレンジ継続時間分析機能
+# ========================================
+
+def load_orange_durations():
+    """data.csvからオレンジ継続時間データを読み込む"""
+    csv_file = "data.csv"
+    
+    if not os.path.exists(csv_file):
+        return []
+    
+    try:
+        durations = []
+        with open(csv_file, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                # デバッグモードのデータは無視し、通常モードのみを対象とする
+                if (row['event_type'] == 'orange_end' and 
+                    float(row['duration_seconds']) > 0 and 
+                    row['debug_mode'] == 'normal'):
+                    durations.append({
+                        'timestamp': row['timestamp'],
+                        'duration': float(row['duration_seconds']),
+                        'mode': row['debug_mode'],
+                        'orange_percentage': float(row['orange_percentage']),
+                        'green_percentage': float(row['green_percentage'])
+                    })
+        return durations
+    except Exception as e:
+        print(f"❌ データ読み込みエラー: {e}")
+        return []
+
+def generate_duration_chart(durations):
+    """継続時間の折れ線グラフを生成"""
+    if not durations:
+        return None
+    
+    print(f"[DEBUG] 継続時間グラフ: {len(durations)}件のデータを処理中")
+    
+    # 日本語フォント設定（matplotlib用）
+    plt.rcParams['font.family'] = 'DejaVu Sans'
+    
+    # 図とサブプロットを作成
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8))
+    fig.suptitle('Orange Lamp Duration Analysis', fontsize=16, fontweight='bold')
+    
+    # データを準備
+    timestamps = [datetime.strptime(d['timestamp'], '%Y-%m-%d %H:%M:%S') for d in durations]
+    duration_values = [d['duration'] for d in durations]
+    orange_percentages = [d['orange_percentage'] for d in durations]
+    
+    print(f"[DEBUG] タイムスタンプ範囲: {timestamps[0]} - {timestamps[-1]}")
+    print(f"[DEBUG] データ期間: {(timestamps[-1] - timestamps[0]).total_seconds() / 3600:.1f}時間")
+    
+    # 上部グラフ: 継続時間の推移
+    ax1.plot(timestamps, duration_values, 'o-', color='orange', linewidth=2, markersize=6)
+    ax1.set_title('Orange Duration Trend', fontsize=14)
+    ax1.set_ylabel('Duration (seconds)', fontsize=12)
+    ax1.grid(True, alpha=0.3)
+    
+    # 平均線を追加
+    avg_duration = sum(duration_values) / len(duration_values)
+    ax1.axhline(y=avg_duration, color='red', linestyle='--', alpha=0.7, 
+                label=f'Average: {avg_duration:.1f}s')
+    ax1.legend()
+    
+    # 下部グラフ: オレンジ検知率の推移
+    ax2.plot(timestamps, orange_percentages, 's-', color='darkorange', linewidth=2, markersize=5)
+    ax2.set_title('Orange Detection Percentage', fontsize=14)
+    ax2.set_ylabel('Detection %', fontsize=12)
+    ax2.set_xlabel('Time', fontsize=12)
+    ax2.grid(True, alpha=0.3)
+    ax2.set_ylim(0, 100)
+    
+    # X軸の日時フォーマット
+    for ax in [ax1, ax2]:
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%m/%d %H:%M'))
+        
+        # データの時間範囲を計算して適切な間隔を設定
+        time_span_hours = (timestamps[-1] - timestamps[0]).total_seconds() / 3600
+        print(f"[DEBUG] 時間範囲: {time_span_hours:.1f}時間")
+        
+        # 時間範囲に基づいて目盛り間隔を設定
+        if time_span_hours <= 6:
+            ax.xaxis.set_major_locator(mdates.HourLocator(interval=1))
+        elif time_span_hours <= 24:
+            ax.xaxis.set_major_locator(mdates.HourLocator(interval=4))
+        elif time_span_hours <= 72:
+            ax.xaxis.set_major_locator(mdates.HourLocator(interval=12))
+        elif time_span_hours <= 168:  # 1週間
+            ax.xaxis.set_major_locator(mdates.DayLocator(interval=1))
+        else:
+            # 非常に長い期間の場合は週単位
+            ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
+            
+        # 目盛りの最大数を制限
+        ax.locator_params(axis='x', nbins=10)
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
+    
+    # レイアウト調整
+    plt.tight_layout()
+    
+    # PNG形式でバイナリデータとして出力
+    img_buffer = BytesIO()
+    plt.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
+    img_buffer.seek(0)
+    
+    # base64エンコード
+    import base64
+    chart_data = base64.b64encode(img_buffer.read()).decode()
+    plt.close(fig)  # メモリリーク防止
+    
+    return chart_data
+
+def calculate_statistics(durations):
+    """統計情報を計算"""
+    if not durations:
+        return {}
+    
+    duration_values = [d['duration'] for d in durations]
+    
+    stats = {
+        'total_count': len(durations),
+        'average_duration': sum(duration_values) / len(duration_values),
+        'min_duration': min(duration_values),
+        'max_duration': max(duration_values),
+        'total_orange_time': sum(duration_values)
+    }
+    
+    # 最近の傾向（最新5件）
+    if len(durations) >= 2:
+        recent_durations = duration_values[-5:]
+        stats['recent_average'] = sum(recent_durations) / len(recent_durations)
+        
+        # 改善傾向の分析
+        if len(durations) >= 2:
+            first_duration = duration_values[0]
+            last_duration = duration_values[-1]
+            stats['improvement'] = first_duration - last_duration
+            stats['improvement_percentage'] = (stats['improvement'] / first_duration * 100) if first_duration > 0 else 0
+    
+    return stats
+
+def load_all_detection_data():
+    """data.csvから全ての検知データを時系列で読み込む"""
+    csv_file = "data.csv"
+    
+    if not os.path.exists(csv_file):
+        return []
+    
+    try:
+        all_data = []
+        with open(csv_file, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                # 通常モードのデータのみを対象とする（デバッグデータは除外）
+                if row['debug_mode'] == 'normal':
+                    all_data.append({
+                        'timestamp': row['timestamp'],
+                        'event_type': row['event_type'],
+                        'detection_result': row['detection_result'],
+                        'orange_percentage': float(row['orange_percentage']) if row['orange_percentage'] else 0,
+                        'green_percentage': float(row['green_percentage']) if row['green_percentage'] else 0,
+                        'duration_seconds': float(row['duration_seconds']) if row['duration_seconds'] else 0,
+                        'image_file': row.get('image_file', '')
+                    })
+        return all_data
+    except Exception as e:
+        print(f"❌ 全データ読み込みエラー: {e}")
+        return []
+
+def generate_gantt_chart(all_data, hours=24):
+    """ガントチャート風のタイムライングラフを生成"""
+    if not all_data:
+        return None
+    
+    # 日本語フォント設定
+    plt.rcParams['font.family'] = 'DejaVu Sans'
+    
+    # 最新データから指定時間分のデータを抽出
+    if all_data:
+        latest_time = datetime.strptime(all_data[-1]['timestamp'], '%Y-%m-%d %H:%M:%S')
+        start_time = latest_time - timedelta(hours=hours)
+        
+        # 指定時間範囲内のデータをフィルタ
+        filtered_data = []
+        for data in all_data:
+            data_time = datetime.strptime(data['timestamp'], '%Y-%m-%d %H:%M:%S')
+            if data_time >= start_time:
+                filtered_data.append(data)
+    else:
+        filtered_data = all_data
+    
+    if not filtered_data:
+        return None
+    
+    # 図を作成
+    fig, ax = plt.subplots(1, 1, figsize=(14, 8))
+    fig.suptitle(f'Lamp Detection Timeline (Last {hours} Hours)', fontsize=16, fontweight='bold')
+    
+    # 時系列データを処理してガントチャート用に変換
+    timeline_data = []
+    current_state = None
+    state_start = None
+    
+    for i, data in enumerate(filtered_data):
+        timestamp = datetime.strptime(data['timestamp'], '%Y-%m-%d %H:%M:%S')
+        detection = data['detection_result']
+        
+        # 状態変化を検出
+        if detection != current_state:
+            # 前の状態を終了
+            if current_state is not None and state_start is not None:
+                timeline_data.append({
+                    'start': state_start,
+                    'end': timestamp,
+                    'state': current_state,
+                    'duration': (timestamp - state_start).total_seconds() / 60  # 分単位
+                })
+            
+            # 新しい状態を開始
+            current_state = detection
+            state_start = timestamp
+        
+        # 最後のデータの場合は現在時刻まで延長
+        if i == len(filtered_data) - 1:
+            end_time = timestamp + timedelta(minutes=1)  # 1分間延長
+            if current_state is not None and state_start is not None:
+                timeline_data.append({
+                    'start': state_start,
+                    'end': end_time,
+                    'state': current_state,
+                    'duration': (end_time - state_start).total_seconds() / 60
+                })
+    
+    # ガントチャートを描画
+    y_pos = 0.5
+    bar_height = 0.4
+    
+    for segment in timeline_data:
+        start_time = segment['start']
+        duration_hours = segment['duration'] / 60  # 時間単位に変換
+        
+        # 色の設定
+        if segment['state'] == 'オレンジ':
+            color = '#FF8C00'  # オレンジ色
+            alpha = 0.8
+        elif segment['state'] == '緑':
+            color = '#32CD32'  # 緑色
+            alpha = 0.8
+        else:  # 不明
+            color = '#808080'  # グレー
+            alpha = 0.5
+        
+        # バーを描画
+        ax.barh(y_pos, duration_hours, left=start_time, height=bar_height, 
+                color=color, alpha=alpha, edgecolor='black', linewidth=0.5)
+        
+        # 長い区間にはラベルを追加
+        if duration_hours > 0.5:  # 30分以上の場合
+            label_x = start_time + timedelta(hours=duration_hours/2)
+            label_text = f"{segment['state']}\n{segment['duration']:.1f}min"
+            ax.text(label_x, y_pos, label_text, ha='center', va='center', 
+                   fontsize=8, fontweight='bold', color='white')
+    
+    # 軸の設定
+    ax.set_ylim(0, 1)
+    ax.set_ylabel('Detection State', fontsize=12)
+    ax.set_xlabel('Time', fontsize=12)
+    ax.set_title(f'Color Detection Timeline', fontsize=14)
+    
+    # Y軸のラベルを非表示
+    ax.set_yticks([])
+    
+    # X軸の日時フォーマット
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%m/%d %H:%M'))
+    
+    # 時間範囲に応じて適切な間隔を設定
+    print(f"[DEBUG] ガントチャート時間範囲: {hours}時間")
+    if hours <= 6:
+        ax.xaxis.set_major_locator(mdates.HourLocator(interval=1))
+    elif hours <= 24:
+        ax.xaxis.set_major_locator(mdates.HourLocator(interval=4))
+    elif hours <= 72:
+        ax.xaxis.set_major_locator(mdates.HourLocator(interval=12))
+    elif hours <= 168:  # 1週間
+        ax.xaxis.set_major_locator(mdates.DayLocator(interval=1))
+    else:
+        ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
+    
+    # 目盛りの最大数を制限
+    ax.locator_params(axis='x', nbins=10)
+    plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
+    
+    # グリッドを追加
+    ax.grid(True, axis='x', alpha=0.3)
+    
+    # 凡例を追加
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor='#FF8C00', alpha=0.8, label='オレンジ'),
+        Patch(facecolor='#32CD32', alpha=0.8, label='緑'),
+        Patch(facecolor='#808080', alpha=0.5, label='不明')
+    ]
+    ax.legend(handles=legend_elements, loc='upper right')
+    
+    # レイアウト調整
+    plt.tight_layout()
+    
+    # PNG形式でバイナリデータとして出力
+    img_buffer = BytesIO()
+    plt.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
+    img_buffer.seek(0)
+    
+    # base64エンコード
+    import base64
+    chart_data = base64.b64encode(img_buffer.read()).decode()
+    plt.close(fig)  # メモリリーク防止
+    
+    return chart_data
+
+@app.route('/analysis')
+def analysis_page():
+    """オレンジ継続時間分析ページ"""
+    try:
+        print("[DEBUG] 分析ページ開始")
+        
+        # データを読み込み
+        durations = load_orange_durations()
+        print(f"[DEBUG] 継続時間データ: {len(durations)}件")
+        
+        all_data = load_all_detection_data()
+        print(f"[DEBUG] 全データ: {len(all_data)}件")
+        
+        # 統計情報を計算
+        stats = calculate_statistics(durations)
+        print(f"[DEBUG] 統計情報計算完了")
+        
+        # グラフを生成
+        chart_data = None
+        gantt_chart_data = None
+        
+        if durations:
+            print(f"[DEBUG] 継続時間グラフ生成開始")
+            try:
+                chart_data = generate_duration_chart(durations)
+                print(f"[DEBUG] 継続時間グラフ生成完了")
+            except Exception as chart_error:
+                print(f"[ERROR] 継続時間グラフエラー: {chart_error}")
+                import traceback
+                traceback.print_exc()
+                # エラーが発生した場合はグラフなしで続行
+                chart_data = None
+        
+        if all_data:
+            print(f"[DEBUG] ガントチャート生成開始")
+            try:
+                gantt_chart_data = generate_gantt_chart(all_data, hours=24)
+                print(f"[DEBUG] ガントチャート生成完了")
+            except Exception as gantt_error:
+                print(f"[ERROR] ガントチャートエラー: {gantt_error}")
+                import traceback
+                traceback.print_exc()
+        
+        print(f"[DEBUG] テンプレート描画開始")
+        return render_template('analysis.html', 
+                             durations=durations,
+                             stats=stats,
+                             chart_data=chart_data,
+                             gantt_chart_data=gantt_chart_data,
+                             current_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        
+    except Exception as e:
+        print(f"[ERROR] 分析ページエラー: {e}")
+        import traceback
+        traceback.print_exc()
+        return render_template('analysis.html', 
+                             durations=[],
+                             stats={},
+                             chart_data=None,
+                             gantt_chart_data=None,
+                             error=str(e),
+                             current_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+
+@app.route('/api/analysis/data', methods=['GET'])
+def get_analysis_data():
+    """分析データをJSON形式で取得するAPI"""
+    try:
+        durations = load_orange_durations()
+        stats = calculate_statistics(durations)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'durations': durations,
+                'statistics': stats,
+                'total_records': len(durations)
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/analysis/chart', methods=['GET'])
+def get_analysis_chart():
+    """分析グラフを取得するAPI"""
+    try:
+        durations = load_orange_durations()
+        
+        if not durations:
+            return jsonify({'success': False, 'error': 'データが見つかりません'}), 404
+        
+        chart_data = generate_duration_chart(durations)
+        
+        if chart_data:
+            return jsonify({'success': True, 'chart_data': chart_data})
+        else:
+            return jsonify({'success': False, 'error': 'グラフの生成に失敗しました'}), 500
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/analysis/gantt', methods=['GET'])
+def get_gantt_chart():
+    """ガントチャートを取得するAPI"""
+    try:
+        # URLパラメータから時間範囲を取得（デフォルトは24時間）
+        hours = int(request.args.get('hours', 24))
+        hours = max(1, min(168, hours))  # 1時間から1週間までに制限
+        
+        all_data = load_all_detection_data()
+        
+        if not all_data:
+            return jsonify({'success': False, 'error': 'データが見つかりません'}), 404
+        
+        gantt_chart_data = generate_gantt_chart(all_data, hours=hours)
+        
+        if gantt_chart_data:
+            return jsonify({'success': True, 'gantt_chart_data': gantt_chart_data})
+        else:
+            return jsonify({'success': False, 'error': 'ガントチャートの生成に失敗しました'}), 500
+            
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 

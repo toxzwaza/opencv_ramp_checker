@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ランプ検知システム Web管理{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand {
+            font-weight: bold;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-running {
+            background-color: #28a745;
+        }
+        .status-stopped {
+            background-color: #dc3545;
+        }
+        .card-header {
+            background-color: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+        }
+        .btn-group-toggle .btn {
+            margin-right: 5px;
+        }
+        footer {
+            margin-top: 50px;
+            padding: 20px 0;
+            border-top: 1px solid #dee2e6;
+            background-color: #f8f9fa;
+        }
+    </style>
+    {% block styles %}{% endblock %}
+</head>
+<body>
+    <!-- ナビゲーションバー -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-traffic-light"></i>
+                ランプ検知システム
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/"><i class="fas fa-home"></i> ホーム</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/coordinates"><i class="fas fa-crosshairs"></i> 座標設定</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/settings"><i class="fas fa-cog"></i> 設定管理</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/monitoring"><i class="fas fa-eye"></i> 監視状況</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/analysis"><i class="fas fa-chart-line"></i> 分析レポート</a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <span class="navbar-text">
+                            <span id="system-status" class="status-indicator status-stopped"></span>
+                            <span id="system-status-text">システム停止中</span>
+                        </span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- メインコンテンツ -->
+    <div class="container mt-4">
+        <!-- アラート表示エリア -->
+        <div id="alert-container"></div>
+        
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- フッター -->
+    <footer class="text-center text-muted">
+        <div class="container">
+            <p>&copy; 2024 ランプ検知システム Web管理 - OpenCV & Flask</p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- 共通JavaScript -->
+    <script>
+        // アラート表示関数
+        function showAlert(message, type = 'info') {
+            const alertHtml = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            document.getElementById('alert-container').innerHTML = alertHtml;
+            
+            // 5秒後に自動で非表示
+            setTimeout(() => {
+                const alert = document.querySelector('.alert');
+                if (alert) {
+                    alert.classList.remove('show');
+                }
+            }, 5000);
+        }
+
+        // システム状態を更新
+        function updateSystemStatus() {
+            fetch('/api/monitoring/status')
+                .then(response => response.json())
+                .then(data => {
+                    const statusIndicator = document.getElementById('system-status');
+                    const statusText = document.getElementById('system-status-text');
+                    
+                    if (data.running) {
+                        statusIndicator.className = 'status-indicator status-running';
+                        statusText.textContent = 'システム実行中';
+                    } else {
+                        statusIndicator.className = 'status-indicator status-stopped';
+                        statusText.textContent = 'システム停止中';
+                    }
+                })
+                .catch(error => {
+                    console.error('システム状態の取得に失敗:', error);
+                });
+        }
+
+        // ページ読み込み時とその後定期的にシステム状態を更新
+        document.addEventListener('DOMContentLoaded', function() {
+            updateSystemStatus();
+            setInterval(updateSystemStatus, 5000); // 5秒毎に更新
+        });
+
+        // AJAX エラーハンドリング
+        function handleAjaxError(error, defaultMessage = 'エラーが発生しました') {
+            console.error('AJAX Error:', error);
+            let message = defaultMessage;
+            
+            if (error.responseJSON && error.responseJSON.message) {
+                message = error.responseJSON.message;
+            } else if (error.statusText) {
+                message = error.statusText;
+            }
+            
+            showAlert(message, 'danger');
+        }
+    </script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

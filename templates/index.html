@@ -1,557 +1,160 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ランプ検知システム - 管理画面</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            color: #333;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        
-        .header {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 15px;
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        }
-        
-        .header h1 {
-            color: #4a5568;
-            margin-bottom: 10px;
-            font-size: 2.5em;
-        }
-        
-        .header p {
-            color: #718096;
-            font-size: 1.1em;
-        }
-        
-        .status-card {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 20px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        }
-        
-        .status-running {
-            border-left: 5px solid #48bb78;
-        }
-        
-        .status-stopped {
-            border-left: 5px solid #f56565;
-        }
-        
-        .status-indicator {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 10px;
-        }
-        
-        .status-running .status-indicator {
-            background: #48bb78;
-            animation: pulse 2s infinite;
-        }
-        
-        .status-stopped .status-indicator {
-            background: #f56565;
-        }
-        
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
-        
-        .btn {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            margin: 5px;
-            text-decoration: none;
-            display: inline-block;
-        }
-        
-        .btn-primary {
-            background: #4299e1;
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            background: #3182ce;
-            transform: translateY(-2px);
-        }
-        
-        .btn-success {
-            background: #48bb78;
-            color: white;
-        }
-        
-        .btn-success:hover {
-            background: #38a169;
-            transform: translateY(-2px);
-        }
-        
-        .btn-warning {
-            background: #ed8936;
-            color: white;
-        }
-        
-        .btn-warning:hover {
-            background: #dd6b20;
-            transform: translateY(-2px);
-        }
-        
-        .btn-danger {
-            background: #f56565;
-            color: white;
-        }
-        
-        .btn-danger:hover {
-            background: #e53e3e;
-            transform: translateY(-2px);
-        }
-        
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }
-        
-        .card {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        }
-        
-        .card h3 {
-            color: #4a5568;
-            margin-bottom: 15px;
-            font-size: 1.4em;
-        }
-        
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-            padding: 8px;
-            background: #f7fafc;
-            border-radius: 5px;
-        }
-        
-        .info-label {
-            font-weight: 600;
-            color: #4a5568;
-        }
-        
-        .info-value {
-            color: #718096;
-        }
-        
-        .current-time {
-            text-align: center;
-            margin: 20px 0;
-            font-size: 1.2em;
-            color: white;
-            background: rgba(0, 0, 0, 0.3);
-            padding: 10px;
-            border-radius: 10px;
-        }
-        
-        .action-buttons {
-            text-align: center;
-            margin-top: 30px;
-        }
-        
-        .restart-dialog {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 1000;
-        }
-        
-        .dialog-content {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            text-align: center;
-            max-width: 500px;
-        }
-        
-        .dialog-content h3 {
-            color: #4a5568;
-            margin-bottom: 20px;
-        }
-        
-        .dialog-content p {
-            color: #718096;
-            margin-bottom: 30px;
-            line-height: 1.6;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <!-- ヘッダー -->
-        <div class="header">
-            <h1>🚦 ランプ検知システム</h1>
-            <p>設定管理とプロセス監視</p>
-        </div>
-        
-        <!-- 現在時刻 -->
-        <div class="current-time">
-            現在時刻: {{ current_time }}
-        </div>
-        
-        <!-- カメラ映像表示（main.py実行中のみ） -->
-        {% if main_running %}
-        <div class="status-card">
-            <h2>📹 ライブカメラ映像</h2>
-            <div class="camera-container" style="text-align: center; margin: 20px 0;">
-                <img id="cameraFeed" src="/video_feed" alt="カメラ映像" 
-                     style="max-width: 100%; height: auto; border: 3px solid #4299e1; border-radius: 10px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);"
-                     onerror="handleCameraError(this)">
-                <div id="cameraError" style="display: none; padding: 20px; background: #fed7d7; color: #c53030; border-radius: 10px; margin-top: 10px;">
-                    📷 カメラに接続できません。カメラが接続されているか確認してください。
-                </div>
-            </div>
-            <p style="text-align: center; color: #718096; font-size: 0.9em; margin-top: 10px;">
-                💡 この映像はmain.pyで表示されているものと同じ内容です
-            </p>
-        </div>
-        {% endif %}
-        
-        <!-- main.py実行状態 -->
-        <div class="status-card {% if main_running %}status-running{% else %}status-stopped{% endif %}">
-            <h2>
-                <span class="status-indicator"></span>
-                main.py 実行状態
-            </h2>
-            <p>
-                {% if main_running %}
-                    <strong style="color: #48bb78;">✅ 実行中</strong> - ランプ検知システムが動作しています
-                {% else %}
-                    <strong style="color: #f56565;">⛔ 停止中</strong> - ランプ検知システムは停止しています
-                {% endif %}
-            </p>
-            
-            <div class="action-buttons">
-                {% if main_running %}
-                    <button class="btn btn-danger" onclick="stopMain()">🛑 停止</button>
-                    <button class="btn btn-warning" onclick="showRestartDialog()">🔄 再起動</button>
-                {% else %}
-                    <button class="btn btn-success" onclick="startMain()">▶️ 開始 (ライブカメラモード)</button>
-                {% endif %}
-                <button class="btn btn-primary" onclick="checkMainStatus()">📊 状態確認</button>
-                {% if not main_running %}
-                <button class="btn btn-secondary" onclick="debugCamera()">🔍 カメラデバッグ</button>
-                {% endif %}
-            </div>
-        </div>
-        
-        <!-- 設定情報 -->
-        <div class="grid">
-            <!-- カメラ設定 -->
-            <div class="card">
-                <h3>📷 カメラ設定</h3>
-                <div class="info-row">
-                    <span class="info-label">検索範囲:</span>
-                    <span class="info-value">{{ settings.camera.search_range }}台</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">解像度:</span>
-                    <span class="info-value">{{ settings.camera.capture_width }}x{{ settings.camera.capture_height }}</span>
-                </div>
-            </div>
-            
-            <!-- 検知設定 -->
-            <div class="card">
-                <h3>🔍 検知設定</h3>
-                <div class="info-row">
-                    <span class="info-label">検知間隔:</span>
-                    <span class="info-value">{{ settings.detection.detection_interval_seconds }}秒</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">通知閾値:</span>
-                    <span class="info-value">{{ settings.detection.notification_threshold_minutes }}分</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">色検出閾値:</span>
-                    <span class="info-value">{{ settings.detection.color_detection_threshold_percentage }}%</span>
-                </div>
-            </div>
-            
-            <!-- 座標設定 -->
-            <div class="card">
-                <h3>📍 座標設定</h3>
-                <div class="info-row">
-                    <span class="info-label">オレンジ:</span>
-                    <span class="info-value">({{ settings.coordinates.orange.x1 }}, {{ settings.coordinates.orange.y1 }}) → ({{ settings.coordinates.orange.x2 }}, {{ settings.coordinates.orange.y2 }})</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">緑:</span>
-                    <span class="info-value">({{ settings.coordinates.green.x1 }}, {{ settings.coordinates.green.y1 }}) → ({{ settings.coordinates.green.x2 }}, {{ settings.coordinates.green.y2 }})</span>
-                </div>
-            </div>
-            
-            <!-- 表示設定 -->
-            <div class="card">
-                <h3>🖥️ 表示設定</h3>
-                <div class="info-row">
-                    <span class="info-label">全画面:</span>
-                    <span class="info-value">{% if settings.display.fullscreen %}有効{% else %}無効{% endif %}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">フォントサイズ:</span>
-                    <span class="info-value">{{ settings.display.font_scale_default }}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">履歴表示件数:</span>
-                    <span class="info-value">{{ settings.display.recent_logs_display }}件</span>
-                </div>
-            </div>
-        </div>
-        
-        <!-- 操作ボタン -->
-        <div class="action-buttons">
-            <a href="/coordinates" class="btn btn-warning">📍 座標設定</a>
-            <a href="/settings" class="btn btn-primary">⚙️ 設定を編集</a>
-            <button class="btn btn-primary" onclick="refreshPage()">🔄 画面更新</button>
+{% extends "base.html" %}
+
+{% block title %}ホーム - ランプ検知システム{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="jumbotron bg-light p-5 rounded mb-4">
+            <h1 class="display-4"><i class="fas fa-traffic-light text-primary"></i> ランプ検知システム</h1>
+            <p class="lead">OpenCVを使用したランプ色判定システムのWeb管理インターフェース</p>
+            <hr class="my-4">
+            <p>このシステムでは、カメラ画像からオレンジと緑のランプを検知し、状態を監視します。</p>
         </div>
     </div>
-    
-    <!-- 再起動確認ダイアログ -->
-    <div id="restartDialog" class="restart-dialog">
-        <div class="dialog-content">
-            <h3>🔄 システム再起動</h3>
-            <p>設定変更を反映するために、カメラ監視システムを再起動しますか？</p>
-            <p><strong>注意:</strong> 現在の監視状態はリセットされます。</p>
-            <div>
-                <button class="btn btn-warning" onclick="executeRestart()">✅ 再起動する</button>
-                <button class="btn btn-primary" onclick="hideRestartDialog()">❌ キャンセル</button>
+</div>
+
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-crosshairs text-warning"></i> 座標設定
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text">画像上でオレンジと緑のランプの位置を設定します。クリック・ドラッグで簡単に座標を指定できます。</p>
+                <a href="/coordinates" class="btn btn-warning">
+                    <i class="fas fa-crosshairs"></i> 座標設定を開く
+                </a>
             </div>
         </div>
     </div>
-    
-    <script>
-        // ページの定期更新
-        function refreshPage() {
-            location.reload();
-        }
-        
-        // 自動更新（30秒毎）
-        setInterval(refreshPage, 30000);
-        
-        // main.py制御
-        function startMain() {
-            fetch('/api/main/start', { method: 'POST' })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert('✅ main.pyを開始しました');
-                        setTimeout(refreshPage, 2000);
-                    } else {
-                        alert('❌ エラー: ' + data.error);
-                    }
-                })
-                .catch(error => {
-                    alert('❌ 通信エラー: ' + error);
-                });
-        }
-        
-        function stopMain() {
-            if (confirm('main.pyを停止しますか？')) {
-                fetch('/api/main/stop', { method: 'POST' })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            alert('✅ main.pyを停止しました');
-                            setTimeout(refreshPage, 2000);
-                        } else {
-                            alert('❌ エラー: ' + data.error);
-                        }
-                    })
-                    .catch(error => {
-                        alert('❌ 通信エラー: ' + error);
-                    });
-            }
-        }
-        
-        function showRestartDialog() {
-            document.getElementById('restartDialog').style.display = 'block';
-        }
-        
-        function hideRestartDialog() {
-            document.getElementById('restartDialog').style.display = 'none';
-        }
-        
-        function executeRestart() {
-            hideRestartDialog();
-            
-            fetch('/api/main/restart', { method: 'POST' })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert('✅ main.pyを再起動しました');
-                        setTimeout(refreshPage, 2000);
-                    } else {
-                        alert('❌ エラー: ' + data.error);
-                    }
-                })
-                .catch(error => {
-                                            alert('❌ 通信エラー: ' + error);
-                    });
-        }
-        
-        function checkMainStatus() {
-            fetch('/api/main/status')
-                .then(response => response.json())
-                .then(data => {
-                    let statusMessage = `システム状態:\n`;
-                    statusMessage += `実行状態: ${data.running ? '実行中' : '停止中'}\n`;
-                    if (data.pid) {
-                        statusMessage += `プロセスID: ${data.pid}\n`;
-                    }
-                    statusMessage += `確認時刻: ${new Date().toLocaleString()}`;
-                    
-                    alert(statusMessage);
-                })
-                .catch(error => {
-                    alert('❌ 状態確認エラー: ' + error);
-                });
-        }
-        
-        // ページ読み込み時の状態確認
-        window.addEventListener('load', function() {
-            // 状態を定期的にチェック
-            setInterval(function() {
-                fetch('/api/main/status')
-                    .then(response => response.json())
-                    .then(data => {
-                        // 状態が変化した場合はページを更新
-                        const currentRunning = {{ 'true' if main_running else 'false' }};
-                        if (data.running !== currentRunning) {
-                            // 状態が変化した場合
-                            if (data.running) {
-                                // 実行開始された場合、カメラフィードを表示
-                                location.reload(); // ページ全体を更新
-                            } else {
-                                // 停止された場合、カメラフィードを非表示
-                                const cameraContainer = document.querySelector('.status-card:has(#cameraFeed)');
-                                if (cameraContainer) {
-                                    cameraContainer.style.display = 'none';
-                                }
-                                refreshPage(); // ページを更新
-                            }
-                        }
-                    })
-                    .catch(error => {
-                        console.error('状態確認エラー:', error);
-                    });
-            }, 5000); // 5秒毎にチェック
-        });
-        
-        function handleCameraError(img) {
-            // main.pyが実行中の場合のみエラー処理
-            fetch('/api/main/status')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.running) {
-                        // 実行中の場合はカメラエラー
-                        img.style.display = 'none';
-                        document.getElementById('cameraError').style.display = 'block';
-                        
-                        // 5秒後に再試行
-                        setTimeout(function() {
-                            img.src = '/video_feed?' + new Date().getTime();
-                            img.style.display = 'block';
-                            document.getElementById('cameraError').style.display = 'none';
-                        }, 5000);
-                    } else {
-                        // 停止中の場合は映像を非表示
-                        img.style.display = 'none';
-                    }
-                })
-                .catch(error => {
-                    console.error('状態確認エラー:', error);
-                });
-        }
-        
-        function debugCamera() {
-            fetch('/api/camera/debug')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        const info = data.debug_info;
-                        let debugMessage = 'カメラデバッグ情報:\n\n';
-                        debugMessage += `main.py実行状態: ${info.main_running ? '実行中' : '停止中'}\n`;
-                        debugMessage += `カメラフィード状態: ${info.camera_running ? '実行中' : '停止中'}\n`;
-                        debugMessage += `利用可能なカメラ: ${info.available_camera !== null ? 'デバイス' + info.available_camera : 'なし'}\n`;
-                        debugMessage += `設定ファイル: ${info.settings_loaded ? '正常' : 'エラー'}\n`;
-                        
-                        if (info.conflicts && info.conflicts.length > 0) {
-                            debugMessage += '\n競合:\n';
-                            info.conflicts.forEach(conflict => {
-                                debugMessage += `  - ${conflict}\n`;
-                            });
-                        }
-                        
-                        alert(debugMessage);
-                    } else {
-                        alert('❌ デバッグ情報の取得に失敗: ' + data.error);
-                    }
-                })
-                .catch(error => {
-                    alert('❌ 通信エラー: ' + error);
-                });
-        }
-        
-        // カメラフィードの自動更新
-        function refreshCameraFeed() {
-            const img = document.getElementById('cameraFeed');
-            if (img && img.style.display !== 'none') {
-                // タイムスタンプを追加してキャッシュを回避
-                const timestamp = new Date().getTime();
-                img.src = '/video_feed?' + timestamp;
-            }
-        }
-        
-        // カメラフィードを定期的にリフレッシュ（main.pyの更新に合わせて）
-        setInterval(refreshCameraFeed, 10000); // 10秒毎に更新
-    </script>
-</body>
-</html>
+
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-cog text-info"></i> 設定管理
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text">検知閾値、通知設定、カメラ設定などのシステム設定を管理します。</p>
+                <a href="/settings" class="btn btn-info">
+                    <i class="fas fa-cog"></i> 設定管理を開く
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-eye text-success"></i> 監視状況
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text">リアルタイムでシステムの監視状況を確認し、監視システムの開始・停止を制御します。</p>
+                <a href="/monitoring" class="btn btn-success">
+                    <i class="fas fa-eye"></i> 監視状況を開く
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-line text-primary"></i> 分析レポート
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text">オレンジランプの継続時間分析、ガントチャート風タイムライン、統計情報を確認できます。</p>
+                <ul class="list-unstyled mb-3">
+                    <li><i class="fas fa-chart-bar text-primary"></i> 時系列タイムライン</li>
+                    <li><i class="fas fa-chart-line text-primary"></i> 継続時間推移</li>
+                    <li><i class="fas fa-calculator text-primary"></i> 統計分析</li>
+                </ul>
+                <a href="/analysis" class="btn btn-primary">
+                    <i class="fas fa-chart-line"></i> 分析レポートを開く
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-download text-secondary"></i> データ管理
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text">検知データのダウンロード、バックアップ、システムログの確認ができます。</p>
+                <ul class="list-unstyled mb-3">
+                    <li><i class="fas fa-file-csv text-secondary"></i> CSVデータ出力</li>
+                    <li><i class="fas fa-archive text-secondary"></i> データバックアップ</li>
+                    <li><i class="fas fa-list text-secondary"></i> システムログ</li>
+                </ul>
+                <button class="btn btn-secondary" disabled>
+                    <i class="fas fa-wrench"></i> 準備中
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-info-circle text-primary"></i> システム情報
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-microchip"></i> システム仕様</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>プラットフォーム:</strong> Raspberry Pi + Python</li>
+                            <li><strong>画像処理:</strong> OpenCV</li>
+                            <li><strong>Web フレームワーク:</strong> Flask</li>
+                            <li><strong>UI フレームワーク:</strong> Bootstrap 5</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-list-check"></i> 主な機能</h6>
+                        <ul class="list-unstyled">
+                            <li><i class="fas fa-check text-success"></i> リアルタイムランプ色検知</li>
+                            <li><i class="fas fa-check text-success"></i> Web ベース座標設定</li>
+                            <li><i class="fas fa-check text-success"></i> 自動通知システム</li>
+                            <li><i class="fas fa-check text-success"></i> 設定管理インターフェース</li>
+                            <li><i class="fas fa-check text-success"></i> ガントチャート分析</li>
+                            <li><i class="fas fa-check text-success"></i> 統計レポート機能</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="alert alert-info">
+            <h6><i class="fas fa-lightbulb"></i> 使用方法</h6>
+            <ol>
+                <li><strong>座標設定:</strong> まず座標設定ページで、オレンジと緑のランプの位置を設定してください。</li>
+                <li><strong>設定調整:</strong> 必要に応じて検知閾値や通知設定を調整してください。</li>
+                <li><strong>監視開始:</strong> 監視状況ページから監視システムを開始してください。</li>
+                <li><strong>状態確認:</strong> ナビゲーションバーの状態インジケータでシステムの動作状況を確認できます。</li>
+            </ol>
+        </div>
+    </div>
+</div>
+{% endblock %}

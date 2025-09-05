@@ -1,0 +1,578 @@
+{% extends "base.html" %}
+
+{% block title %}監視状況 - ランプ検知システム{% endblock %}
+
+{% block styles %}
+<style>
+    .status-card {
+        transition: all 0.3s ease;
+    }
+    
+    .status-running {
+        border-left: 4px solid #28a745;
+    }
+    
+    .status-stopped {
+        border-left: 4px solid #dc3545;
+    }
+    
+    .live-image {
+        max-width: 100%;
+        height: auto;
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+    }
+    
+    .refresh-indicator {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 5px 10px;
+        border-radius: 15px;
+        font-size: 12px;
+    }
+    
+    .log-entry {
+        font-family: 'Courier New', monospace;
+        font-size: 0.9em;
+        padding: 5px 10px;
+        margin: 2px 0;
+        border-radius: 4px;
+        background-color: #f8f9fa;
+    }
+    
+    .log-entry.orange {
+        background-color: #fff3cd;
+        border-left: 4px solid #ff6600;
+    }
+    
+    .log-entry.green {
+        background-color: #d1e7dd;
+        border-left: 4px solid #28a745;
+    }
+    
+    .log-entry.error {
+        background-color: #f8d7da;
+        border-left: 4px solid #dc3545;
+    }
+    
+    .control-button {
+        margin: 5px;
+    }
+    
+    .stats-number {
+        font-size: 2em;
+        font-weight: bold;
+    }
+    
+    .stats-label {
+        font-size: 0.9em;
+        color: #6c757d;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-eye text-success"></i> 監視状況</h2>
+            <div>
+                <button id="start-monitoring" class="btn btn-success control-button">
+                    <i class="fas fa-play"></i> 監視開始
+                </button>
+                <button id="stop-monitoring" class="btn btn-danger control-button">
+                    <i class="fas fa-stop"></i> 監視停止
+                </button>
+                <button id="refresh-status" class="btn btn-info control-button">
+                    <i class="fas fa-sync"></i> 状態更新
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- システム状態 -->
+<div class="row mb-4">
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card status-card" id="system-status-card">
+            <div class="card-body text-center">
+                <div class="stats-number" id="system-status-icon">
+                    <i class="fas fa-circle text-muted"></i>
+                </div>
+                <div class="stats-label">システム状態</div>
+                <div id="system-status-text">確認中...</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="stats-number text-primary" id="uptime-display">--:--:--</div>
+                <div class="stats-label">稼働時間</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="stats-number text-warning" id="detection-count">0</div>
+                <div class="stats-label">検知回数</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="stats-number text-info" id="last-detection">--:--:--</div>
+                <div class="stats-label">最終検知</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- ライブ映像 -->
+    <div class="col-lg-8 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-video"></i> ライブ映像
+                    <span class="refresh-indicator" id="image-refresh-status">停止中</span>
+                </h5>
+            </div>
+            <div class="card-body text-center">
+                <div id="live-image-container" style="position: relative;">
+                    <img id="live-image" class="live-image" src="" alt="ライブ映像" style="display: none;">
+                    <div id="no-image-placeholder">
+                        <i class="fas fa-video-slash fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">監視システムを開始してください</p>
+                    </div>
+                </div>
+                
+                <div class="mt-3">
+                    <button id="capture-snapshot" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-camera"></i> スナップショット
+                    </button>
+                    <button id="toggle-auto-refresh" class="btn btn-outline-info btn-sm">
+                        <i class="fas fa-sync"></i> 自動更新: ON
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 検知ログ -->
+    <div class="col-lg-4 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-list"></i> 検知ログ
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="detection-logs" style="max-height: 400px; overflow-y: auto;">
+                    <div class="text-muted text-center">
+                        <i class="fas fa-clock"></i> ログを待機中...
+                    </div>
+                </div>
+                
+                <div class="mt-3">
+                    <button id="clear-logs" class="btn btn-outline-warning btn-sm">
+                        <i class="fas fa-trash"></i> ログクリア
+                    </button>
+                    <button id="export-logs" class="btn btn-outline-success btn-sm">
+                        <i class="fas fa-download"></i> エクスポート
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 詳細情報 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-line"></i> 詳細情報
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-cog"></i> 現在の設定</h6>
+                        <ul class="list-unstyled" id="current-settings-display">
+                            <li>検知間隔: <span id="current-interval">--</span>秒</li>
+                            <li>検知閾値: <span id="current-threshold">--</span>%</li>
+                            <li>通知間隔: <span id="current-notification">--</span>分</li>
+                            <li>デバッグモード: <span id="current-debug">--</span></li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-info-circle"></i> システム情報</h6>
+                        <ul class="list-unstyled">
+                            <li>プロセスID: <span id="process-id">--</span></li>
+                            <li>メモリ使用量: <span id="memory-usage">--</span>MB</li>
+                            <li>CPU使用率: <span id="cpu-usage">--</span>%</li>
+                            <li>最終更新: <span id="last-update">--:--:--</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+class MonitoringManager {
+    constructor() {
+        this.isMonitoring = false;
+        this.autoRefresh = true;
+        this.refreshInterval = null;
+        this.startTime = null;
+        this.detectionCount = 0;
+        this.logs = [];
+        
+        this.init();
+    }
+    
+    init() {
+        this.setupEventListeners();
+        this.updateStatus();
+        this.startAutoRefresh();
+    }
+    
+    setupEventListeners() {
+        document.getElementById('start-monitoring').addEventListener('click', () => this.startMonitoring());
+        document.getElementById('stop-monitoring').addEventListener('click', () => this.stopMonitoring());
+        document.getElementById('refresh-status').addEventListener('click', () => this.updateStatus());
+        document.getElementById('capture-snapshot').addEventListener('click', () => this.captureSnapshot());
+        document.getElementById('toggle-auto-refresh').addEventListener('click', () => this.toggleAutoRefresh());
+        document.getElementById('clear-logs').addEventListener('click', () => this.clearLogs());
+        document.getElementById('export-logs').addEventListener('click', () => this.exportLogs());
+    }
+    
+    async updateStatus() {
+        try {
+            const response = await fetch('/api/monitoring/status');
+            const status = await response.json();
+            
+            this.isMonitoring = status.running;
+            this.updateStatusDisplay(status);
+            
+            if (this.isMonitoring) {
+                this.loadLiveImage();
+                if (!this.startTime) {
+                    this.startTime = new Date();
+                }
+            } else {
+                this.startTime = null;
+                document.getElementById('live-image').style.display = 'none';
+                document.getElementById('no-image-placeholder').style.display = 'block';
+            }
+            
+            // 設定情報も更新
+            this.updateSettingsDisplay();
+            
+        } catch (error) {
+            console.error('状態更新エラー:', error);
+            showAlert('状態の更新に失敗しました', 'warning');
+        }
+    }
+    
+    updateStatusDisplay(status) {
+        const statusCard = document.getElementById('system-status-card');
+        const statusIcon = document.getElementById('system-status-icon');
+        const statusText = document.getElementById('system-status-text');
+        
+        if (status.running) {
+            statusCard.className = 'card status-card status-running';
+            statusIcon.innerHTML = '<i class="fas fa-circle text-success"></i>';
+            statusText.textContent = '監視中';
+            
+            document.getElementById('start-monitoring').disabled = true;
+            document.getElementById('stop-monitoring').disabled = false;
+        } else {
+            statusCard.className = 'card status-card status-stopped';
+            statusIcon.innerHTML = '<i class="fas fa-circle text-danger"></i>';
+            statusText.textContent = '停止中';
+            
+            document.getElementById('start-monitoring').disabled = false;
+            document.getElementById('stop-monitoring').disabled = true;
+        }
+        
+        // 稼働時間の更新
+        if (this.startTime && status.running) {
+            const uptime = new Date() - this.startTime;
+            const hours = Math.floor(uptime / (1000 * 60 * 60));
+            const minutes = Math.floor((uptime % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((uptime % (1000 * 60)) / 1000);
+            document.getElementById('uptime-display').textContent = 
+                `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        } else {
+            document.getElementById('uptime-display').textContent = '--:--:--';
+        }
+        
+        // 最終更新時刻
+        document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+    }
+    
+    async updateSettingsDisplay() {
+        try {
+            const response = await fetch('/api/settings');
+            const settings = await response.json();
+            
+            document.getElementById('current-interval').textContent = 
+                settings.detection?.detection_interval_seconds || '--';
+            document.getElementById('current-threshold').textContent = 
+                settings.detection?.color_detection_threshold_percentage || '--';
+            document.getElementById('current-notification').textContent = 
+                settings.notification?.notification_intervals?.first_alert_minutes || '--';
+            document.getElementById('current-debug').textContent = 
+                settings.system?.debug_mode ? 'ON' : 'OFF';
+                
+        } catch (error) {
+            console.error('設定表示更新エラー:', error);
+        }
+    }
+    
+    async startMonitoring() {
+        try {
+            showAlert('監視システムを開始中...', 'info');
+            const response = await fetch('/api/monitoring/start', { method: 'POST' });
+            const result = await response.json();
+            
+            if (result.success) {
+                showAlert(result.message, 'success');
+                this.startTime = new Date();
+                setTimeout(() => this.updateStatus(), 2000); // 2秒後に状態更新
+            } else {
+                showAlert(result.message, 'danger');
+            }
+        } catch (error) {
+            console.error('監視開始エラー:', error);
+            showAlert('監視システムの開始に失敗しました', 'danger');
+        }
+    }
+    
+    async stopMonitoring() {
+        try {
+            const response = await fetch('/api/monitoring/stop', { method: 'POST' });
+            const result = await response.json();
+            
+            if (result.success) {
+                showAlert(result.message, 'info');
+                this.updateStatus();
+            } else {
+                showAlert(result.message, 'danger');
+            }
+        } catch (error) {
+            console.error('監視停止エラー:', error);
+            showAlert('監視システムの停止に失敗しました', 'danger');
+        }
+    }
+    
+    async loadLiveImage() {
+        try {
+            const response = await fetch('/api/image/latest');
+            if (response.ok) {
+                const blob = await response.blob();
+                const imageUrl = URL.createObjectURL(blob);
+                
+                const liveImage = document.getElementById('live-image');
+                liveImage.src = imageUrl;
+                liveImage.style.display = 'block';
+                document.getElementById('no-image-placeholder').style.display = 'none';
+                
+                // 前のURLを解放
+                if (liveImage.dataset.prevUrl) {
+                    URL.revokeObjectURL(liveImage.dataset.prevUrl);
+                }
+                liveImage.dataset.prevUrl = imageUrl;
+                
+                // 更新インジケータ
+                document.getElementById('image-refresh-status').textContent = 
+                    new Date().toLocaleTimeString();
+                    
+            } else {
+                document.getElementById('live-image').style.display = 'none';
+                document.getElementById('no-image-placeholder').style.display = 'block';
+            }
+        } catch (error) {
+            console.error('ライブ画像読み込みエラー:', error);
+        }
+    }
+    
+    async captureSnapshot() {
+        try {
+            showAlert('スナップショットを撮影中...', 'info');
+            const response = await fetch('/api/image/capture', { method: 'POST' });
+            const result = await response.json();
+            
+            if (result.success) {
+                showAlert('スナップショットを撮影しました', 'success');
+                this.addLog('SNAPSHOT', 'スナップショット撮影完了');
+                // 画像を更新
+                setTimeout(() => this.loadLiveImage(), 1000);
+            } else {
+                showAlert(result.message, 'danger');
+            }
+        } catch (error) {
+            console.error('スナップショット撮影エラー:', error);
+            showAlert('スナップショットの撮影に失敗しました', 'danger');
+        }
+    }
+    
+    toggleAutoRefresh() {
+        this.autoRefresh = !this.autoRefresh;
+        const button = document.getElementById('toggle-auto-refresh');
+        
+        if (this.autoRefresh) {
+            button.innerHTML = '<i class="fas fa-sync"></i> 自動更新: ON';
+            button.className = 'btn btn-outline-info btn-sm';
+            this.startAutoRefresh();
+        } else {
+            button.innerHTML = '<i class="fas fa-sync"></i> 自動更新: OFF';
+            button.className = 'btn btn-outline-secondary btn-sm';
+            this.stopAutoRefresh();
+        }
+    }
+    
+    startAutoRefresh() {
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+        }
+        
+        this.refreshInterval = setInterval(() => {
+            if (this.autoRefresh) {
+                this.updateStatus();
+            }
+        }, 5000); // 5秒毎に更新
+    }
+    
+    stopAutoRefresh() {
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+            this.refreshInterval = null;
+        }
+    }
+    
+    addLog(type, message) {
+        const timestamp = new Date().toLocaleTimeString();
+        const logEntry = {
+            timestamp: timestamp,
+            type: type,
+            message: message
+        };
+        
+        this.logs.unshift(logEntry);
+        
+        // ログ数制限（最新50件）
+        if (this.logs.length > 50) {
+            this.logs = this.logs.slice(0, 50);
+        }
+        
+        this.updateLogDisplay();
+        
+        // 検知カウント更新
+        if (type === 'ORANGE' || type === 'GREEN') {
+            this.detectionCount++;
+            document.getElementById('detection-count').textContent = this.detectionCount;
+            document.getElementById('last-detection').textContent = timestamp;
+        }
+    }
+    
+    updateLogDisplay() {
+        const logContainer = document.getElementById('detection-logs');
+        
+        if (this.logs.length === 0) {
+            logContainer.innerHTML = '<div class="text-muted text-center"><i class="fas fa-clock"></i> ログを待機中...</div>';
+            return;
+        }
+        
+        const logHtml = this.logs.map(log => {
+            let logClass = '';
+            if (log.type === 'ORANGE') logClass = 'orange';
+            else if (log.type === 'GREEN') logClass = 'green';
+            else if (log.type === 'ERROR') logClass = 'error';
+            
+            return `
+                <div class="log-entry ${logClass}">
+                    <small class="text-muted">${log.timestamp}</small>
+                    <div>${log.type}: ${log.message}</div>
+                </div>
+            `;
+        }).join('');
+        
+        logContainer.innerHTML = logHtml;
+    }
+    
+    clearLogs() {
+        if (confirm('ログをクリアしますか？')) {
+            this.logs = [];
+            this.detectionCount = 0;
+            document.getElementById('detection-count').textContent = '0';
+            document.getElementById('last-detection').textContent = '--:--:--';
+            this.updateLogDisplay();
+            showAlert('ログをクリアしました', 'info');
+        }
+    }
+    
+    exportLogs() {
+        if (this.logs.length === 0) {
+            showAlert('エクスポートするログがありません', 'warning');
+            return;
+        }
+        
+        const csvContent = 'timestamp,type,message\n' + 
+            this.logs.map(log => `${log.timestamp},${log.type},"${log.message}"`).join('\n');
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        
+        link.setAttribute('href', url);
+        link.setAttribute('download', `detection_logs_${new Date().toISOString().slice(0,10)}.csv`);
+        link.style.visibility = 'hidden';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showAlert('ログをエクスポートしました', 'success');
+    }
+    
+    // シミュレーション用のダミーログ追加（開発中）
+    simulateDetection() {
+        const types = ['ORANGE', 'GREEN', 'ERROR'];
+        const messages = [
+            'オレンジランプ検知 (85.2%)',
+            '緑ランプ検知 (92.1%)',
+            'カメラエラー: フレーム取得失敗'
+        ];
+        
+        const randomType = types[Math.floor(Math.random() * types.length)];
+        const randomMessage = messages[types.indexOf(randomType)];
+        
+        this.addLog(randomType, randomMessage);
+    }
+}
+
+// ページ読み込み時に初期化
+document.addEventListener('DOMContentLoaded', function() {
+    const monitoring = new MonitoringManager();
+    
+    // 開発用：5秒毎にダミーログを追加（本番では削除）
+    // setInterval(() => monitoring.simulateDetection(), 5000);
+});
+</script>
+{% endblock %}
